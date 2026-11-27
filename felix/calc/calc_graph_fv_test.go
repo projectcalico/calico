@@ -458,6 +458,14 @@ var baseTests = []StateList{
 		vxlanWithWEPIPsAndWEP,
 	},
 	{
+		// Node interface CIDRs reach HostMetadataUpdate, including when only the
+		// CIDRs change.
+		vxlanWithWEPIPs,
+		vxlanWithWEPIPsIfaceCIDRs,
+		vxlanWithWEPIPsIfaceCIDRsChanged,
+		vxlanWithWEPIPs,
+	},
+	{
 		// Test corner case where the IP pool and block share a /32.
 		// Should be able to add or remove the block or pool in either order and get the same result.
 		vxlanSlash32,

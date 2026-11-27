@@ -539,6 +539,7 @@ message HostMetadataUpdate {
   string ipv6_addr = 3;
   string asnumber = 4;
   map<string, string> labels = 5;
+  repeated string interface_cidrs = 6;
 }
 
 message HostMetadataRemove {

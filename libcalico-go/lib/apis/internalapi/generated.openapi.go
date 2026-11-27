@@ -1112,17 +1112,34 @@ func schema_libcalico_go_lib_apis_internalapi_NodeInterface(ref common.Reference
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "NodeInterface represents a network interface on a node.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "Name is the name of the interface.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"addresses": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "Addresses lists the IP addresses assigned to the interface.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"cidrs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CIDRs lists the same addresses as Addresses, in CIDR form with the interface's prefix length (e.g. 192.168.1.10/24).",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{

@@ -525,6 +525,146 @@ func TestLookup_MultiProbeWrapWins(t *testing.T) {
 	}
 }
 
+// TestLookupFunc_MatchesSubRing checks the property callers rely on:
+// filtering with LookupFunc answers exactly as Lookup on a ring built
+// from only the accepted members, and a key whose unfiltered owner is
+// accepted keeps that owner. Each trial first queues a Remove of a
+// member that accept allows, so a LookupFunc that skipped the sweep
+// would still elect it.
+func TestLookupFunc_MatchesSubRing(t *testing.T) {
+	forEachConfig(t, func(t *testing.T, replicas, probes int) {
+		const N = 20
+		const keyProbes = 2000
+		rng := rand.New(rand.NewPCG(1, 2))
+
+		for trial := range 10 {
+			r := newRing[string](replicas, probes)
+			for i := range N {
+				m := fmt.Sprintf("m%d", i)
+				r.Insert(m, m)
+			}
+			removed := fmt.Sprintf("m%d", rng.IntN(N))
+			r.Remove(removed)
+
+			accepted := map[string]bool{removed: true}
+			sub := newRing[string](replicas, probes)
+			for i := range N {
+				m := fmt.Sprintf("m%d", i)
+				if m != removed && rng.IntN(3) == 0 {
+					accepted[m] = true
+					sub.Insert(m, m)
+				}
+			}
+			accept := func(m string) bool { return accepted[m] }
+
+			got := make([]string, keyProbes)
+			for k := range keyProbes {
+				key := fmt.Sprintf("trial-%d-key-%d", trial, k)
+				var gotOK bool
+				got[k], gotOK = r.LookupFunc(key, accept)
+				want, wantOK := sub.Lookup(key)
+				if got[k] != want || gotOK != wantOK {
+					t.Fatalf("trial %d key %q: LookupFunc=(%q, %v), sub-ring Lookup=(%q, %v)",
+						trial, key, got[k], gotOK, want, wantOK)
+				}
+			}
+			for k := range keyProbes {
+				key := fmt.Sprintf("trial-%d-key-%d", trial, k)
+				if owner, _ := r.Lookup(key); accepted[owner] && got[k] != owner {
+					t.Fatalf("trial %d key %q: accepted owner %q moved to %q", trial, key, owner, got[k])
+				}
+			}
+		}
+	})
+}
+
+func TestLookupFunc_AcceptAllMatchesLookup(t *testing.T) {
+	forEachConfig(t, func(t *testing.T, replicas, probes int) {
+		r := newRing[string](replicas, probes)
+		for i := range 10 {
+			m := fmt.Sprintf("m%d", i)
+			r.Insert(m, m)
+		}
+		all := func(string) bool { return true }
+		for k := range 1000 {
+			key := fmt.Sprintf("k-%d", k)
+			got, _ := r.LookupFunc(key, all)
+			want, _ := r.Lookup(key)
+			if got != want {
+				t.Fatalf("key %q: LookupFunc(all)=%q, Lookup=%q", key, got, want)
+			}
+		}
+	})
+}
+
+func TestLookupFunc_NoneAcceptedReturnsFalse(t *testing.T) {
+	forEachConfig(t, func(t *testing.T, replicas, probes int) {
+		none := func(string) bool { return false }
+		r := newRing[string](replicas, probes)
+		if v, ok := r.LookupFunc("k", none); ok || v != "" {
+			t.Fatalf("empty ring: got (%q, %v), want (\"\", false)", v, ok)
+		}
+		r.Insert("a", "a")
+		r.Insert("b", "b")
+		if v, ok := r.LookupFunc("k", none); ok || v != "" {
+			t.Fatalf("nothing accepted: got (%q, %v), want (\"\", false)", v, ok)
+		}
+	})
+}
+
+// TestLookupFunc_WalksPastRejectedAndWraps pins hashes so the probe
+// lands just below a rejected entry at the top of the ring: the walk
+// must skip it and wrap round to the accepted entry at the bottom.
+func TestLookupFunc_WalksPastRejectedAndWraps(t *testing.T) {
+	known := map[string]uint64{
+		saltedKey("low", 0):  100,
+		saltedKey("high", 0): 200,
+		saltedKey("k", 0):    150,
+	}
+	stub := func(b []byte) uint64 {
+		v, ok := known[string(b)]
+		if !ok {
+			t.Fatalf("unexpected hash input %q", b)
+		}
+		return v
+	}
+	r := New[string](WithHash(stub))
+	r.Insert("low", "low-val")
+	r.Insert("high", "high-val")
+
+	if v, ok := r.Lookup("k"); !ok || v != "high-val" {
+		t.Fatalf("Lookup: got (%q, %v), want (high-val, true)", v, ok)
+	}
+	v, ok := r.LookupFunc("k", func(v string) bool { return v != "high-val" })
+	if !ok || v != "low-val" {
+		t.Fatalf("LookupFunc: got (%q, %v), want (low-val, true)", v, ok)
+	}
+}
+
+// TestLookupFunc_MaxWrapDistance pins the probe one past the only
+// accepted entry, so its wrapped distance is the largest uint64; it
+// must still be returned rather than reported as not found.
+func TestLookupFunc_MaxWrapDistance(t *testing.T) {
+	known := map[string]uint64{
+		saltedKey("only", 0): 100,
+		saltedKey("k", 0):    101,
+	}
+	stub := func(b []byte) uint64 {
+		v, ok := known[string(b)]
+		if !ok {
+			t.Fatalf("unexpected hash input %q", b)
+		}
+		return v
+	}
+	r := New[string](WithHash(stub))
+	r.Insert("only", "only-val")
+
+	v, ok := r.LookupFunc("k", func(string) bool { return true })
+	if !ok || v != "only-val" {
+		t.Fatalf("got (%q, %v), want (only-val, true)", v, ok)
+	}
+}
+
 func TestNew_PanicsOnBadArgs(t *testing.T) {
 	cases := []struct {
 		name string

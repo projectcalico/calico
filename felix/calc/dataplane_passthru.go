@@ -34,7 +34,7 @@ import (
 // duplicates along the way.  It maps OnUpdate() calls to dedicated method calls for consistency
 // with the rest of the dataplane API.
 //
-// HostMetadataUpdate is sourced from the v3 Node resource: BGP IPv4/IPv6 plus labels and ASN.
+// HostMetadataUpdate is sourced from the v3 Node resource: BGP IPv4/IPv6, labels, ASN and interface CIDRs.
 // IPv4/IPv6 falls back to the Node's address list (Internal preferred, External as backup) whenever
 // BGP doesn't supply one.
 type DataplanePassthru struct {
@@ -140,9 +140,10 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	}
 
 	info := &HostInfo{
-		labels:  node.Labels,
-		ip4Addr: extractNodeAddress(node, 4),
-		ip6Addr: extractNodeAddress(node, 6),
+		labels:         node.Labels,
+		ip4Addr:        extractNodeAddress(node, 4),
+		ip6Addr:        extractNodeAddress(node, 6),
+		interfaceCIDRs: extractInterfaceCIDRs(node),
 	}
 
 	if node.Spec.BGP != nil && node.Spec.BGP.ASNumber != nil {
@@ -198,6 +199,26 @@ func extractNodeAddress(node *internalapi.Node, ipVersion int) string {
 	}
 
 	return ""
+}
+
+// extractInterfaceCIDRs returns the valid CIDRs of all the Node's interfaces
+func extractInterfaceCIDRs(node *internalapi.Node) []string {
+	var cidrs []string
+	for _, iface := range node.Spec.Interfaces {
+		for _, c := range iface.CIDRs {
+			s, ok := parseCIDR(c)
+			if !ok {
+				logrus.WithFields(logrus.Fields{
+					"node":      node.Name,
+					"interface": iface.Name,
+					"cidr":      c,
+				}).Warn("Ignoring Node interface CIDR: not a CIDR")
+				continue
+			}
+			cidrs = append(cidrs, s)
+		}
+	}
+	return cidrs
 }
 
 // parseCIDR strictly parses a CIDR string and returns it normalized to "host

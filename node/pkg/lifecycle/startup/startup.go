@@ -735,6 +735,7 @@ func configureIPsAndSubnets(node *internalapi.Node, k8sNode *v1.Node, getInterfa
 				return false, err
 			}
 			nodeInterface.Addresses = append(nodeInterface.Addresses, ip.String())
+			nodeInterface.CIDRs = append(nodeInterface.CIDRs, addr.String())
 		}
 		nodeInterfaces = append(nodeInterfaces, nodeInterface)
 	}
