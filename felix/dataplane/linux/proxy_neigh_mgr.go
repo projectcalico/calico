@@ -278,7 +278,6 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 			delete(m.hostIfaceToCIDRs, msg.Name)
 		} else {
 			m.refreshHostIface(msg.Name)
-			m.failListenerIfAddrRemoved(msg.Name, msg.Addrs)
 		}
 		m.dirty = true
 
@@ -1052,6 +1051,7 @@ func (m *proxyNeighManager) refreshHostIface(ifaceName string) {
 		delete(m.hostIfaceToCIDRs, ifaceName)
 		return
 	}
+	m.failListenerIfAddrRemoved(ifaceName, addrs)
 
 	var cidrs []net.IPNet
 	for _, addr := range addrs {
@@ -1075,10 +1075,15 @@ func (m *proxyNeighManager) refreshHostIface(ifaceName string) {
 
 // failListenerIfAddrRemoved marks ifaceName's NDP listener failed, so it is
 // recreated, when its bound address is not in addrs.
-func (m *proxyNeighManager) failListenerIfAddrRemoved(ifaceName string, addrs set.Set[string]) {
+func (m *proxyNeighManager) failListenerIfAddrRemoved(ifaceName string, addrs []netlink.Addr) {
 	l, ok := m.listeners[ifaceName]
-	if !ok || !l.boundAddr.IsValid() || addrs.Contains(l.boundAddr.WithZone("").String()) {
+	if !ok || m.ipVersion != 6 {
 		return
+	}
+	for _, a := range addrs {
+		if a.IPNet != nil && a.IP.Equal(l.boundAddr.AsSlice()) {
+			return
+		}
 	}
 	logrus.WithFields(logrus.Fields{
 		"iface": ifaceName,
