@@ -154,9 +154,10 @@ down() {
 case "${1:-up}" in
 up) up ;;
 seed) seed ;;
+images) printf '%s\n' "${SEED_IMAGES[@]}" ;;
 down) down ;;
 *)
-	echo "usage: $(basename "$0") up|seed|down" >&2
+	echo "usage: $(basename "$0") up|seed|images|down" >&2
 	exit 1
 	;;
 esac

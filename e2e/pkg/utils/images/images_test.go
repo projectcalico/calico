@@ -19,14 +19,19 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
 )
 
-// seedScript names the same images in shell, so nothing but this test stops the
-// two lists drifting apart.
-const seedScript = "../../../../.argoci/scripts/phases/seed_images.sh"
+// The seed scripts name the same images in shell, so nothing but these tests
+// stops the lists drifting apart. They are run, not grepped, so a reference in a
+// comment does not count as seeded.
+const (
+	seedScript         = "../../../../.argoci/scripts/phases/seed_images.sh"
+	externalNodeScript = "../../../../hack/test/kind/external-node.sh"
+)
 
 // notSeeded holds the images the seed script deliberately leaves out, with the
 // reason. Anything else declared in images.go has to be in the script.
@@ -38,10 +43,7 @@ var notSeeded = map[string]string{
 }
 
 func TestWorkloadImagesAreSeeded(t *testing.T) {
-	script, err := os.ReadFile(seedScript)
-	if err != nil {
-		t.Fatalf("read %s: %v", seedScript, err)
-	}
+	seeded := scriptImages(t, seedScript, "--list")
 
 	declared := declaredImages(t)
 	for name := range notSeeded {
@@ -50,18 +52,61 @@ func TestWorkloadImagesAreSeeded(t *testing.T) {
 		}
 	}
 
+	known := map[string]bool{}
 	for name, ref := range declared {
+		known[ref] = true
 		if reason, skip := notSeeded[name]; skip {
-			if strings.Contains(string(script), ref) {
+			if seeded[ref] {
 				t.Errorf("%s is listed in the seed script but recorded as not seeded (%s)", name, reason)
 			}
 			continue
 		}
-		if !strings.Contains(string(script), ref) {
+		if !seeded[ref] {
 			t.Errorf("%s (%s) is not in %s; add it there, or record why it is exempt in notSeeded",
 				name, ref, seedScript)
 		}
 	}
+	for ref := range seeded {
+		if !known[ref] {
+			t.Errorf("%s seeds %s, which images.go does not declare; declare it there or drop it", seedScript, ref)
+		}
+	}
+}
+
+func TestExternalNodeImagesAreSeeded(t *testing.T) {
+	seeded := scriptImages(t, externalNodeScript, "images")
+
+	want := map[string]bool{}
+	for _, ref := range ExternalNodeImages {
+		want[ref] = true
+		if !seeded[ref] {
+			t.Errorf("%s is in ExternalNodeImages but %s does not seed it", ref, externalNodeScript)
+		}
+	}
+	for ref := range seeded {
+		if !want[ref] {
+			t.Errorf("%s seeds %s, which is not in ExternalNodeImages", externalNodeScript, ref)
+		}
+	}
+}
+
+// scriptImages runs a seed script in its list-only mode and returns the image
+// references it prints.
+func scriptImages(t *testing.T, script string, args ...string) map[string]bool {
+	t.Helper()
+
+	out, err := exec.Command("bash", append([]string{script}, args...)...).Output()
+	if err != nil {
+		t.Fatalf("bash %s %s: %v", script, strings.Join(args, " "), err)
+	}
+	refs := map[string]bool{}
+	for _, ref := range strings.Fields(string(out)) {
+		refs[ref] = true
+	}
+	if len(refs) == 0 {
+		t.Fatalf("bash %s %s listed no images", script, strings.Join(args, " "))
+	}
+	return refs
 }
 
 func TestRapidClientImageIsConsistent(t *testing.T) {
