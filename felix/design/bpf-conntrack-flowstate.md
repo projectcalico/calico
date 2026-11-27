@@ -233,7 +233,9 @@ Stale state heals from packets: a route move re-pins via the loose arm,
 and a packet confirming the recorded ingress refreshes the leg's claims
 from the program's own provenance. A flow whose forward traffic has
 stopped never re-enters the reconcile, so only a userspace scanner can
-repair it.
+repair it. Nor can packets heal a hint naming a deleted tunnel device: the
+trusted hint sends them there. Whatever replaces a tunnel device must
+repoint its legs (`conntrack_repoint`, triggered by the route manager).
 
 ### Cleanup: three layers
 

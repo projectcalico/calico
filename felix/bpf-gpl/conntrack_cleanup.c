@@ -101,3 +101,49 @@ __attribute__((section("tc"))) int conntrack_cleanup(struct __sk_buff *skb)
 	bpf_skb_store_bytes(skb, 0, &ictx, sizeof(ictx), 0);
 	return 0;
 }
+
+/* Input and result of conntrack_repoint.
+ *
+ * WARNING: returned to user space; keep in sync with RepointContext in
+ * bpf_scanner.go.
+ */
+struct ct_repoint_ctx {
+	__u32 old_ifindex;
+	__u32 new_ifindex;
+
+	__u64 num_repointed;
+};
+
+static CALI_BPF_INLINE void repoint_leg(struct calico_ct_leg *leg, struct ct_repoint_ctx *rctx)
+{
+	/* CAS so that a leg a packet repointed meanwhile is left alone. */
+	if (__sync_val_compare_and_swap(&leg->ifindex, rctx->old_ifindex, rctx->new_ifindex) ==
+			rctx->old_ifindex) {
+		rctx->num_repointed++;
+	}
+}
+
+static long repoint_ct_entry(void *map, struct calico_ct_key *key, struct calico_ct_value *value, void *ctx)
+{
+	if (value->type == CALI_CT_TYPE_NAT_FWD) {
+		return 0;
+	}
+	repoint_leg(&value->a_to_b, ctx);
+	repoint_leg(&value->b_to_a, ctx);
+	return 0;
+}
+
+/* conntrack_repoint moves legs from a replaced device to its same-kind replacement, so their claims stay valid. */
+SEC("tc") int conntrack_repoint(struct __sk_buff *skb)
+{
+	struct ct_repoint_ctx rctx = {};
+	bpf_skb_load_bytes(skb, 0, &rctx, sizeof(rctx));
+	rctx.num_repointed = 0;
+	if (rctx.old_ifindex != CT_INVALID_IFINDEX && rctx.old_ifindex != rctx.new_ifindex) {
+		CALI_DEBUG("Repointing conntrack legs from dev %d to %d",
+				rctx.old_ifindex, rctx.new_ifindex);
+		bpf_for_each_map_elem(&CT_MAP_V, repoint_ct_entry, &rctx, 0);
+	}
+	bpf_skb_store_bytes(skb, 0, &rctx, sizeof(rctx), 0);
+	return 0;
+}

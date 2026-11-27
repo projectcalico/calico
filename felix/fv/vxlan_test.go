@@ -17,6 +17,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -199,6 +200,41 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				}
 				cc.CheckConnectivity()
 			})
+
+			_ = BPFMode() && vxlanMode == api.VXLANModeAlways && routeSource == "CalicoIPAM" && !enableIPv6 &&
+				It("_BPF_ should keep an established flow when the VXLAN device is recreated", func() {
+					cc.ExpectSome(w[0], w[1])
+					cc.CheckConnectivity()
+
+					pc := w[0].StartPersistentConnection(w[1].IP, 8055, workload.PersistentConnectionOpts{
+						MonitorConnectivity: true,
+					})
+					defer pc.Stop()
+					expectPongs := func(timeout string) {
+						EventuallyWithOffset(1, pc.SinceLastPong, timeout, "100ms").Should(
+							BeNumerically("<", time.Second), "no pongs on the long-lived connection")
+					}
+					expectPongs("10s")
+
+					ifindex := func() string {
+						out, err := felixes[0].ExecOutput("cat", "/sys/class/net/vxlan.calico/ifindex")
+						if err != nil {
+							return ""
+						}
+						return strings.TrimSpace(out)
+					}
+					oldIfindex := ifindex()
+					Expect(oldIfindex).NotTo(BeEmpty())
+					repointed := felixes[0].WatchStdoutFor(regexp.MustCompile(
+						`Repointed conntrack entries to the replaced tunnel device.*ipVersion=4.*legs=[1-9]`))
+
+					By("deleting vxlan.calico on the client's node; Felix recreates it with a new ifindex")
+					felixes[0].Exec("ip", "link", "del", "vxlan.calico")
+					Eventually(ifindex, "30s", "200ms").ShouldNot(Or(BeEmpty(), Equal(oldIfindex)))
+					expectPongs("15s")
+					Expect(pc.IsConnectionReset()).To(BeFalse())
+					Eventually(repointed, "5s", "100ms").Should(BeClosed())
+				})
 
 			It("should have some blackhole routes installed", func() {
 				if routeSource == "WorkloadIPs" {
