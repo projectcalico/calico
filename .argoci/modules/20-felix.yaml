@@ -28,19 +28,8 @@ steps:
   # Every FV VM unpacks this step's output, so a lane whose batches all fail to
   # configure usually broke here.
   - name: felix-build
-    env:
-      - name: CALICO_IMAGE_TAR
-        value: /cache/calico-image/calico.tar
-      - name: CALICO_BUILD_DIR
-        value: /cache/calico-build
-      - name: BUILD_CACHE_GROUP
-        value: calico
     depends: [build-calico-image, check-go, felix-fv-plan]
     timeout: 40m
-    jobSize: large
-    requests: {cpu: 7000m, memory: 10Gi}
-    services:
-      - docker
     secretBundles:
       - name: google-service-account-for-gce
         keys:
@@ -49,20 +38,47 @@ steps:
     cache:
       - {name: calico-build, mode: read, path: /cache/calico-build}
       - {name: calico-image, mode: read, path: /cache/calico-image}
-    commands: |
-      artifact pull workflow felix-fv-plan
-      if [ "$(cat felix-fv-plan/build)" = skip ]; then
-        echo "Every FV lane passed on an earlier run of this PR with the same inputs; nothing to build."
-      else
+    checkout: true
+    goCache: read
+    # The felix and FV images need a docker daemon, which the machine has, and its
+    # builds read go-cache's disk in place.
+    runOnVM:
+      createVM:
+        # The cache disk's project and zone: a disk attaches only to a machine
+        # in both. A stockout there falls back across families.
+        machineTypes: [e2-standard-8, n2d-standard-8, n2-standard-8, c2d-standard-8]
+        project: tigera-cc-dev
+        zones: [us-central1-a]
+        vmImageProject: unique-caldron-775
+      project: tigera-cc-dev
+      env: [GCE_SERVICE_ACCOUNT_KEY, ARGOCI_GCP_REGION, ARGOCI_RESOURCE_PREFIX]
+      put:
+        - /cache/calico-image/calico.tar:calico-build/calico.tar
+        - /cache/calico-build/calico-cgo-amd64:calico-build/calico-cgo-amd64
+        - /cache/calico-build/calico-race-amd64:calico-build/calico-race-amd64
+        - /cache/calico-build/libbpf-amd64.tar:calico-build/libbpf-amd64.tar
+      source: |
+        set -euo pipefail
+        checkout=$PWD
+        artifact pull workflow felix-fv-plan
+        if [ "$(cat felix-fv-plan/build)" = skip ]; then
+          echo "Every FV lane passed on an earlier run of this PR with the same inputs; nothing to build."
+          exit 0
+        fi
         source .argoci/scripts/vm-fleet-setup.sh
+        go_env=$(.argoci/scripts/vm-go-cache felix-build) || exit 1
+        eval "$go_env"
+        export CALICO_IMAGE_TAR="$HOME/calico-build/calico.tar" CALICO_BUILD_DIR="$HOME/calico-build"
         .argoci/scripts/load-cached-images calico
         .semaphore/scripts/load-felix-prereqs.sh
         cd felix
         # REMOTE_DEPS= reuses the cached image. Not `make build`, which also
         # cross-compiles the Windows binary.
         make REMOTE_DEPS= bin/calico-felix image ut-bpf-prereqs fv-prereqs
+        # From the checkout's own path: the FV VMs unpack the tree it tars under
+        # the checkout's directory name, not the go-build path the build ran at.
+        cd "$checkout/felix"
         ./.semaphore/cache-test-artifacts
-      fi
 
   - name: felix-static-checks
     env:
