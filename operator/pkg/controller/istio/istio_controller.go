@@ -18,13 +18,17 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
 	"github.com/go-logr/logr"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -101,13 +105,29 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		return fmt.Errorf("istio-controller failed to watch ClusterInformation resource: %w", err)
 	}
 
-	// The data plane rolls only after istiod finishes its rollout.
+	// The CA and trust anchor Secrets the Istio CR names, and the operator-managed CA.
+	if err = c.WatchObject(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.enqueueForReferencedSecret)); err != nil {
+		return fmt.Errorf("istio-controller failed to watch Secrets in the operator namespace: %w", err)
+	}
+	for _, name := range []string{istio.CACertsSecretName, istio.IstioSelfSignedCASecretName} {
+		if err = utils.AddSecretsWatch(c, name, istio.IstioNamespace); err != nil {
+			return fmt.Errorf("istio-controller failed to watch Secret %s/%s: %w", istio.IstioNamespace, name, err)
+		}
+	}
+	if err = utils.AddConfigMapWatch(c, istio.TrustAnchorsConfigMapName, istio.IstioNamespace, &handler.EnqueueRequestForObject{}); err != nil {
+		return fmt.Errorf("istio-controller failed to watch ConfigMap %s/%s: %w", istio.IstioNamespace, istio.TrustAnchorsConfigMapName, err)
+	}
+	// The data plane and a CA signer transition wait for istiod to finish its rollout.
 	if err = c.WatchObject(&appsv1.Deployment{}, &handler.EnqueueRequestForObject{}, istiodRolloutPredicate()); err != nil {
 		return fmt.Errorf("istio-controller failed to watch Deployment %s/%s: %w", istio.IstioNamespace, istio.IstioIstiodDeploymentName, err)
 	}
 
 	if err = utils.AddPeriodicReconcile(c, utils.PeriodicReconcileTime, &handler.EnqueueRequestForObject{}); err != nil {
 		return fmt.Errorf("istio-controller failed to create periodic reconcile watch: %w", err)
+	}
+
+	if err = opts.Extensions.Istio().Watches(c); err != nil {
+		return fmt.Errorf("istio-controller failed to add the extension watches: %w", err)
 	}
 
 	return nil
@@ -144,6 +164,7 @@ func NewReconciler(o ReconcilerOptions) *ReconcileIstio {
 		status:   o.Status,
 		provider: o.Provider,
 		ext:      o.Ext,
+		now:      time.Now,
 	}
 }
 
@@ -154,6 +175,8 @@ type ReconcileIstio struct {
 	status   status.StatusManager
 	provider operatorv1.Provider
 	ext      extensions.Extensions
+	// now is the clock the CA signer transition runs on; nil means time.Now.
+	now func() time.Time
 }
 
 func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
@@ -268,15 +291,47 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
+	trust, err := r.resolveTrust(ctx, instance)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the Istio certificate authority and trust anchors", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+	if trust.notice != "" {
+		r.status.SetWarning(caWarningKey, trust.notice)
+	} else {
+		r.status.ClearWarning(caWarningKey)
+	}
+
+	ci := controller.Inputs{
+		RenderInputs: render.Inputs{Installation: installationSpec},
+		Client:       r.Client,
+		Status:       r.status,
+	}
+	var partials []error
+	extensionRoots, err := r.ext.Istio().TrustRoots(ctx, ci, instance)
+	if extensions.IsPartial(err) {
+		partials, err = append(partials, err), nil
+	}
+	if err != nil {
+		r.degradeForExtension(err, operatorv1.ResourceReadError, "Error reading the Istio extension's trust roots", reqLogger)
+		return reconcile.Result{}, err
+	}
+
 	// Render resources for Istio support
 	istioCfg := &istio.Configuration{
-		Installation:   installationSpec,
-		PullSecrets:    pullSecrets,
-		Istio:          instance,
-		IstioNamespace: istio.IstioNamespace,
-		Scheme:         r.scheme,
-		ClusterID:      clusterID,
-		Live:           live,
+		Installation:    installationSpec,
+		PullSecrets:     pullSecrets,
+		Istio:           instance,
+		IstioNamespace:  istio.IstioNamespace,
+		Scheme:          r.scheme,
+		ClusterID:       clusterID,
+		Live:            live,
+		LocalCA:         trust.localCA,
+		CASource:        trust.source,
+		Transition:      trust.transition,
+		AdditionalRoots: append(slices.Clip(trust.additional), extensionRoots...),
+		OwnRoots:        trust.ownRoots,
+		CurrentCACerts:  trust.current,
 	}
 	istioComponentCRDs, istioComponent, err := istio.Istio(istioCfg)
 	if err != nil {
@@ -284,17 +339,12 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
-	ci := controller.Inputs{
-		RenderInputs: render.Inputs{Installation: installationSpec},
-		Client:       r.Client,
-	}
 	ci, err = r.ext.Istio().ExtendInputs(ctx, ci)
+	if extensions.IsPartial(err) {
+		partials, err = append(partials, err), nil
+	}
 	if err != nil {
-		if reason, ok := extensions.DegradedReason(err); ok {
-			r.status.SetDegraded(reason, err.Error(), nil, reqLogger)
-			return reconcile.Result{}, err
-		}
-		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error preparing Istio extension", err, reqLogger)
+		r.degradeForExtension(err, operatorv1.ResourceCreateError, "Error preparing Istio extension", reqLogger)
 		return reconcile.Result{}, err
 	}
 
@@ -351,10 +401,41 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		r.status.ClearWarning(gatewayAPIWarningKey)
 	}
 
+	// A CA signer transition in progress sets when it next has to be looked at:
+	// to see istiod roll, or for a phase deadline.
+	result := reconcile.Result{RequeueAfter: trust.requeueAfter}
+
+	// Invalid CA or trust anchor input, and input the extension left out, are
+	// excluded, not fatal: the rest rendered, and the watches reconcile again
+	// once the input is fixed. They share one Degraded condition, so both are
+	// reported together rather than one hiding the other.
+	if len(trust.problems) > 0 || len(partials) > 0 {
+		reason := operatorv1.ResourceValidationError
+		var messages []string
+		if len(trust.problems) > 0 {
+			messages = append(messages, "Istio certificate authority or trust anchors need attention: "+strings.Join(trust.problems, "; "))
+		} else {
+			reason, _ = extensions.DegradedReason(partials[0])
+		}
+		for _, p := range partials {
+			messages = append(messages, p.Error())
+		}
+		r.status.SetDegraded(reason, strings.Join(messages, "; "), nil, reqLogger)
+		return result, nil
+	}
+
 	// Clear the degraded bit if we've reached this far.
 	r.status.ClearDegraded()
 
-	return reconcile.Result{}, nil
+	return result, nil
+}
+
+func (r *ReconcileIstio) degradeForExtension(err error, reason operatorv1.TigeraStatusReason, msg string, reqLogger logr.Logger) {
+	if typed, ok := extensions.DegradedReason(err); ok {
+		r.status.SetDegraded(typed, err.Error(), nil, reqLogger)
+		return
+	}
+	r.status.SetDegraded(reason, msg, err, reqLogger)
 }
 
 // istiodRolloutPredicate passes status updates too, because an istiod rollout
@@ -559,6 +640,19 @@ func (r *ReconcileIstio) configurePolicySyncPathPrefix(ctx context.Context, inst
 func (r *ReconcileIstio) maintainFinalizer(ctx context.Context, instance *operatorv1.Istio, reqLogger logr.Logger) (res reconcile.Result, err error, finalized bool) {
 	// Executing clean up on finalizing
 	if !instance.DeletionTimestamp.IsZero() {
+		ci := controller.Inputs{Client: r.Client, Status: r.status, Terminating: true}
+		var done bool
+		if done, err = r.ext.Istio().Finalize(ctx, ci, instance); err != nil {
+			reason, ok := extensions.DegradedReason(err)
+			if !ok {
+				reason = operatorv1.ResourceUpdateError
+			}
+			r.status.SetDegraded(reason, "Error cleaning up the Istio extension", err, reqLogger)
+			return
+		}
+		if !done {
+			return reconcile.Result{RequeueAfter: utils.FinalizerRemovalRetry}, nil, true
+		}
 		if _, err = utils.PatchFelixConfiguration(ctx, r.Client, fieldOwner, func(fc *v3.FelixConfiguration) (bool, error) {
 			return r.setIstioFelixConfiguration(ctx, instance, fc, true)
 		}); err != nil {
