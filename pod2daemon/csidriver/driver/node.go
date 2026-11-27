@@ -26,6 +26,7 @@ import (
 	"syscall"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/moby/sys/mountinfo"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -206,17 +207,37 @@ func (ns *nodeService) mount(destinationDir, volumeID string) error {
 		return err
 	}
 
-	// Not really needed but attempt to workaround writing to volume mounts that k8s has created:
-	// https://github.com/kubernetes/kubernetes/blob/61ac9d46382884a8bd9e228da22bca5817f6d226/pkg/util/mount/mount_linux.go
-	// TODO: Test if this is really needed now with CSI as opposed to flexvolume which was run on the host.
-	// Run "mount -t tmpfs -o size=8K tmpfs destinationDir"
-	if err := syscall.Mount("tmpfs", destinationDir, "tmpfs", syscall.O_RDWR|syscall.MS_RELATIME, "size=8K"); err != nil {
-		_ = os.RemoveAll(newDir)
-		log.Errorf("Could not mount tmpfs to %s: %v", destinationDir, err)
+	// The kubelet publishes the volume again for running pods after it restarts, and
+	// mounting again would stack a second layer on the target.
+	tmpfsMounted, err := mountinfo.Mounted(destinationDir)
+	if err != nil {
+		log.Errorf("Mount error: failed to check whether %s is mounted: %v", destinationDir, err)
 		return err
 	}
 
 	newDestinationDir := destinationDir + "/nodeagent"
+	if tmpfsMounted {
+		// A publish that failed part-way can leave the tmpfs without the bind mount.
+		bindMounted, err := mountinfo.Mounted(newDestinationDir)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			log.Errorf("Mount error: failed to check whether %s is mounted: %v", newDestinationDir, err)
+			return err
+		}
+		if bindMounted {
+			log.Infof("%s is already mounted", destinationDir)
+			return nil
+		}
+	} else {
+		// The tmpfs holds the nodeagent directory, so unmounting it leaves the target
+		// empty. The kubelet cannot remove a target that still has anything in it.
+		// Run "mount -t tmpfs -o size=8K tmpfs destinationDir"
+		if err := syscall.Mount("tmpfs", destinationDir, "tmpfs", syscall.O_RDWR|syscall.MS_RELATIME, "size=8K"); err != nil {
+			_ = os.RemoveAll(newDir)
+			log.Errorf("Could not mount tmpfs to %s: %v", destinationDir, err)
+			return err
+		}
+	}
+
 	err = os.MkdirAll(newDestinationDir, 0777)
 	if err != nil {
 		// Run "umount destinationDir"
@@ -304,21 +325,48 @@ func (ns *nodeService) retrievePodInfoFromFile(volumeID string) (*creds.Credenti
 }
 
 func (ns *nodeService) unmount(dir, volumeID string) error {
-	// Unmount the bind mount.
-	err := syscall.Unmount(dir+"/nodeagent", 0)
-	if err != nil {
-		log.WithError(err).WithField("directory", fmt.Sprintf("%s/nodeagent", dir)).Error("Failed to unmount csidriver directory. Ignoring...")
-	}
+	// A target can hold several stacked layers, and the kubelet never deletes the pod
+	// while any remain.
+	bindDir := dir + "/nodeagent"
+	for {
+		mounted, err := mountinfo.Mounted(dir)
+		if errors.Is(err, fs.ErrNotExist) {
+			break
+		}
+		if err != nil {
+			log.WithError(err).WithField("directory", dir).Error("Failed to check whether csidriver directory is mounted")
+			return err
+		}
+		if !mounted {
+			break
+		}
 
-	// Unmount the tmpfs.
-	err = syscall.Unmount(dir, 0)
-	if err != nil {
-		log.WithError(err).WithField("directory", dir).Error("Failed to unmount csidriver directory. Ignoring...")
+		// Unmount the bind mount.
+		bindErr := syscall.Unmount(bindDir, 0)
+		if errors.Is(bindErr, syscall.EINVAL) || errors.Is(bindErr, syscall.ENOENT) {
+			// Not mounted, as after an unpublish that stopped part-way.
+			bindErr = nil
+		}
+		if bindErr != nil {
+			log.WithError(bindErr).WithField("directory", bindDir).Error("Failed to unmount csidriver directory")
+		}
+
+		// Unmount the tmpfs.
+		err = syscall.Unmount(dir, 0)
+		if err != nil {
+			log.WithError(err).WithField("directory", dir).Error("Failed to unmount csidriver directory")
+			err = fmt.Errorf("tmpfs: %w", err)
+			if bindErr != nil {
+				// The tmpfs is busy for as long as the bind mount stays on it.
+				err = fmt.Errorf("%w; nodeagent bind mount: %w", err, bindErr)
+			}
+			return err
+		}
 	}
 
 	// Delete the directory that was created.
 	delDir := strings.Join([]string{ns.config.NodeAgentWorkloadHomeDir, volumeID}, "/")
-	err = os.RemoveAll(delDir)
+	err := os.RemoveAll(delDir)
 	if err != nil {
 		log.Errorf("Unmount error: unable to remove mount directory %s: %v", delDir, err)
 		if !errors.Is(err, fs.ErrNotExist) {
