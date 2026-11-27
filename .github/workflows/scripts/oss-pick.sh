@@ -312,6 +312,12 @@ do_export() {
   emit "export=ready"
 }
 
+# CI labels (basic-ci, skip-ci) aren't carried: the target repo decides the pick's CI.
+carried_labels() {
+  sort -u | grep '.' | grep -vxE 'cherry-pick-candidate|skip-bot-cherry-pick' \
+    | grep -vE -- '-ci$' | paste -sd, || true
+}
+
 # Pure-ish text: build the PR title, body, and labels from the source PR
 # metadata. Mirrors build-pr-description so the merge-queue-bot can parse the
 # body ("**Original Commit SHA**:"). Reads the report from the artifact.
@@ -409,8 +415,7 @@ EOF
 
   local carried=""
   if [ "$CARRY_SOURCE_LABELS" = "true" ]; then
-    carried="$(printf '%s\n' "$labels" | sort -u | grep '.' \
-      | grep -vxE 'cherry-pick-candidate|skip-bot-cherry-pick' | paste -sd, || true)"
+    carried="$(printf '%s\n' "$labels" | carried_labels)"
   fi
   PR_LABELS_OUT="$carried"
   if [ -n "$EXTRA_LABELS" ]; then
