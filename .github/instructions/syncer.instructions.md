@@ -5,8 +5,11 @@ applyTo:
   - "libcalico-go/lib/backend/syncersv1/**"
   - "typha/pkg/syncclient/**"
   - "typha/pkg/syncclientutils/**"
-  - "typha/pkg/calc/validation_filter.go"
+  - "typha/pkg/calc/**"
   - "felix/calc/validation_filter.go"
+  - "felix/calc/async_decoupler.go"
+  - "felix/calc/async_calc_graph.go"
+  - "felix/calc/stats_collector.go"
 ---
 
 # Syncer API
