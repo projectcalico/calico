@@ -75,11 +75,13 @@ type backfillCase struct {
 	want  int
 }
 
-// With 1s buckets at seedNow, the next bucket to stream starts at seedNow-1, so backfill covers
-// [start, seedNow-1). Starts in the streaming, filling, or head bucket backfill nothing rather
-// than wrapping the whole ring.
+// With 1s buckets at seedNow, the oldest bucket starts at seedNow-18 and the next bucket to
+// stream starts at seedNow-1, so backfill covers [max(start, seedNow-18), seedNow-1). Starts in
+// the streaming, filling, or head bucket backfill nothing rather than wrapping the whole ring.
 func TestBackfillStopsAtStreamingBucket(t *testing.T) {
 	cases := []backfillCase{
+		{name: "before history", start: seedNow - 100, want: 17},
+		{name: "oldest bucket", start: seedNow - 18, want: 17},
 		{name: "history", start: seedNow - 3, want: 2},
 		{name: "streaming bucket", start: seedNow - 1, want: 0},
 		{name: "filling bucket", start: seedNow, want: 0},
