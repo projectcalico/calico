@@ -25,7 +25,8 @@ import (
 // extension returned.
 type degraded struct {
 	error
-	reason operatorv1.TigeraStatusReason
+	reason  operatorv1.TigeraStatusReason
+	partial bool
 }
 
 func (e degraded) Unwrap() error {
@@ -35,6 +36,20 @@ func (e degraded) Unwrap() error {
 // Degradedf returns an error the controller degrades with under the given reason.
 func Degradedf(reason operatorv1.TigeraStatusReason, format string, args ...any) error {
 	return degraded{error: fmt.Errorf(format, args...), reason: reason}
+}
+
+// Partialf reports input the extension left out while it produced the rest. A
+// controller that supports it renders what the extension returned and then
+// degrades under the given reason, so one bad input does not hold back the others.
+// Elsewhere it acts as Degradedf.
+func Partialf(reason operatorv1.TigeraStatusReason, format string, args ...any) error {
+	return degraded{error: fmt.Errorf(format, args...), reason: reason, partial: true}
+}
+
+// IsPartial reports whether err came from Partialf.
+func IsPartial(err error) bool {
+	var d degraded
+	return errors.As(err, &d) && d.partial
 }
 
 // InvalidConfigf reports configuration the variant does not support.
