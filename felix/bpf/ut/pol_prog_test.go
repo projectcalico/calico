@@ -692,6 +692,49 @@ var polProgramTests = []polProgramTest{
 			packetNoPorts(253, "ff02::1", "ff02::2")},
 	},
 
+	{
+		PolicyName: "allow icmpv6 by name - v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "ICMPv6"}},
+		}}),
+		AllowedPackets: []packet{
+			packetNoPorts(58, "ff02::1", "ff02::2")},
+		DroppedPackets: []packet{
+			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
+			udpPkt("[ff02::1]:31245", "[ff02::2]:80"),
+			icmpPkt("[ff02::1]", "[ff02::2]"),
+			packetNoPorts(253, "ff02::1", "ff02::2")},
+	},
+	{
+		PolicyName: "allow !icmpv6 by name - v6",
+		ForIPv6:    true,
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:      "Allow",
+			NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "ICMPv6"}},
+		}}),
+		AllowedPackets: []packet{
+			tcpPkt("[ff02::1]:31245", "[ff02::2]:80"),
+			udpPkt("[ff02::1]:31245", "[ff02::2]:80"),
+			packetNoPorts(253, "ff02::1", "ff02::2")},
+		DroppedPackets: []packet{
+			packetNoPorts(58, "ff02::1", "ff02::2")},
+	},
+	{
+		PolicyName: "allow udplite by name",
+		Policy: makeRulesSingleTier([]*proto.Rule{{
+			Action:   "Allow",
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "UDPLite"}},
+		}}),
+		AllowedPackets: []packet{
+			packetNoPorts(136, "10.0.0.1", "10.0.0.2")},
+		DroppedPackets: []packet{
+			tcpPkt("10.0.0.1:31245", "10.0.0.2:80"),
+			udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
+			icmpPkt("10.0.0.1", "10.0.0.2")},
+	},
+
 	// CIDR tests.
 	{
 		PolicyName: "allow 10.0.0.1/32",
