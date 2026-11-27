@@ -79,6 +79,12 @@ func ProgramsMaps() []maps.Map {
 }
 
 func RemoveConnectTimeLoadBalancer(ipv4Enabled bool, cgroupv2 string) error {
+	// libbpf is unavailable in non-cgo builds.  This cleanup is best-effort and
+	// must not invoke the libbpf stub, which panics, on platforms that cannot
+	// use BPF (for example s390x builds without cgo).
+	if !libbpf.IsSupported() {
+		return nil
+	}
 	if os.Getenv("FELIX_DebugSkipCTLBCleanup") == "true" {
 		log.Info("FV special case: skipping CTLB cleanup")
 		return nil

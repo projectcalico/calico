@@ -34,6 +34,11 @@ import (
 // #include "libbpf_api.h"
 import "C"
 
+// IsSupported reports whether this build can make libbpf calls.
+func IsSupported() bool {
+	return true
+}
+
 type Obj struct {
 	filename string
 	obj      *C.struct_bpf_object
