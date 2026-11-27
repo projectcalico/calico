@@ -415,6 +415,7 @@ func TestReuseRules(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := testPin()
 			p.ProductVersion = tc.pinned
+			p.Hash = tc.pinned
 			local := LocalLoader{Config: fakeConfig(t, "", fakeRepo(tc.checkout))}
 			if got := local.Reuse(p); got != tc.want {
 				t.Errorf("Reuse() = %v, want %v", got, tc.want)
@@ -524,6 +525,39 @@ func TestLocalLoaderReuseDoesNotRegenerate(t *testing.T) {
 	}
 	if got.ReleaseName != "must-be-reused" {
 		t.Errorf("reuse regenerated the pin: got %q", got.ReleaseName)
+	}
+}
+
+// Reuse must follow which outside repos a run includes: a pin made without a
+// repo is stale once a flag adds it, and the reverse. A repo that merely moved
+// keeps the pin, so a step run after a build can't replace the build's pin.
+func TestLocalCheckFollowsRepos(t *testing.T) {
+	repo := Repo{Component: "extra", Dir: "/extra", Branch: "main"}
+	without := &Pin{ProductVersion: fakeVersion, Hash: fakeVersion}
+	// Pinned at an older version than the fake describe now gives.
+	with := &Pin{
+		ProductVersion: fakeVersion,
+		Hash:           fakeVersion + "-v0.0.1-1-gaaaaaaaaaaaa",
+		Components:     map[string]registry.Component{"extra": {Version: "v0.0.1-1-gaaaaaaaaaaaa"}},
+	}
+	for _, tc := range []struct {
+		name  string
+		pin   *Pin
+		repos []Repo
+		want  bool
+	}{
+		{"no repos either side", without, nil, true},
+		{"repo added since", without, []Repo{repo}, false},
+		{"repo dropped since", with, nil, false},
+		{"same repo, since moved", with, []Repo{repo}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := fakeConfig(t, t.TempDir(), fakeRepo(fakeVersion))
+			cfg.Repos = tc.repos
+			if got := localCheck(LocalLoader{Config: cfg}, tc.pin); got != tc.want {
+				t.Errorf("localCheck = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 

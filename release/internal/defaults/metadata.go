@@ -94,6 +94,12 @@ func readMetadata() map[string]string {
 	return m
 }
 
+// ParseMetadata resolves the variables a metadata.mk sets, such as one read
+// from another branch.
+func ParseMetadata(data []byte) (map[string]string, error) {
+	return parseMetadata(data)
+}
+
 // parseMetadata wraps data with a driver makefile and runs make on it via
 // stdin, so make resolves $(...) references and ?= precedence naturally.
 // The driver prints only the variables introduced by the included data.
