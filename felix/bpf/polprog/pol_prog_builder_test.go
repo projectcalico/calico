@@ -533,3 +533,28 @@ func TestProgramSplitRandomPolicies(t *testing.T) {
 func expectValidSubPrograms(progs []asm.Insns, polMapIdx, stride int, desc string) {
 	ExpectWithOffset(1, CheckSubPrograms(progs, polMapIdx, stride)).NotTo(HaveOccurred(), desc)
 }
+
+// Felix gets a rule's protocol name lowercased from the API's spelling. A name the program can't
+// turn into a number becomes 0, so the rule would match the wrong traffic or none.
+func TestProtocolNameMapping(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		num  uint8
+	}{
+		{"TCP", 6},
+		{"UDP", 17},
+		{"ICMP", 1},
+		{"ICMPv6", 58},
+		{"SCTP", 132},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			for _, spelling := range []string{tc.name, strings.ToLower(tc.name), strings.ToUpper(tc.name)} {
+				p := &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: spelling}}
+				Expect(protocolToNumber(p)).To(Equal(tc.num), "protocol name %q", spelling)
+			}
+			n := &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: int32(tc.num)}}
+			Expect(protocolToName(n)).To(Equal(strings.ToLower(tc.name)), "protocol number %d", tc.num)
+		})
+	}
+}
