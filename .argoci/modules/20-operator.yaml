@@ -57,7 +57,12 @@ steps:
         project: tigera-cc-dev
         zones: [us-central1-a]
         vmImageProject: unique-caldron-775
+        # A preempted run reruns once on demand.
+        spot: true
+        # The first scratch-utils that creates spot and reports a preemption.
+        image: gcr.io/unique-caldron-775/scratch-utils:spot-414caf5
       project: tigera-cc-dev
+      image: gcr.io/unique-caldron-775/scratch-utils:spot-414caf5
       put:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
       source: |

@@ -323,7 +323,12 @@ steps:
         project: tigera-cc-dev
         zones: [us-central1-a]
         vmImageProject: unique-caldron-775
+        # A preempted run reruns once on demand.
+        spot: true
+        # The first scratch-utils that creates spot and reports a preemption.
+        image: gcr.io/unique-caldron-775/scratch-utils:spot-414caf5
       project: tigera-cc-dev
+      image: gcr.io/unique-caldron-775/scratch-utils:spot-414caf5
       env: [AZ_SUBSCRIPTION_ID, AZ_TENANT_ID, AZ_SP_ID, AZ_SP_PASSWORD, ARGOCI_RESOURCE_PREFIX]
       put:
         - /cache/calico-image/calico.tar:calico-build/calico.tar
@@ -368,6 +373,9 @@ steps:
         export AZURE_RESOURCE_GROUP="${SUFFIX}-rg"
         export REPORT_DIR="$repo/process/testing/winfv-felix/report"
         az login --service-principal -u "$AZ_SP_ID" -p "$AZ_SP_PASSWORD" --tenant "$AZ_TENANT_ID" --output none
+        # A preempted attempt dies before its trap, leaving its resource group
+        # under this same name for the rerun to collide with.
+        ( cd process/testing/aso && ./vmss.sh delete )
         export CALICO_IMAGE_TAR="$HOME/calico-build/calico.tar"
         .argoci/scripts/load-cached-images calico node
         # Touched: make would rebuild anything older than the checkout.
