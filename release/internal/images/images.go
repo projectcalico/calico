@@ -266,8 +266,10 @@ type settings struct {
 	// resolve reports a published tag's digest. Defaults to the registry.
 	resolve registry.DigestResolver
 
-	// resume is the record an earlier run left, and how to check it.
-	resume *resume
+	// recordedRefs is what an earlier run published, which a resume skips.
+	recordedRefs []string
+
+	force bool
 }
 
 // A step's options. Option reaches every step; the per-step interfaces let a
@@ -431,15 +433,20 @@ func WithRecord(rec steps.RefRecorder) PublishResolveOption {
 	})
 }
 
-// WithResume skips the units an earlier run already published, judged against
-// the refs it recorded. force republishes a unit whose published digest is not
-// one of those refs; without it the difference is an error.
-func WithResume(published []string, force bool) PublishOption {
+// WithResume supplies a wrapping step's own record, which it reads under
+// its own step name.
+func WithResume(published []string) PublishOption {
 	return publishSetting(func(s *settings) error {
-		if len(published) == 0 {
-			return fmt.Errorf("no recorded refs to resume from")
-		}
-		s.resume = &resume{published: published, force: force}
+		s.recordedRefs = published
+		return nil
+	})
+}
+
+// WithForce republishes a unit whose published digest is not one the record
+// holds; without it that difference is an error.
+func WithForce(force bool) PublishOption {
+	return publishSetting(func(s *settings) error {
+		s.force = force
 		return nil
 	})
 }
@@ -448,12 +455,6 @@ type retag struct {
 	registry string
 	tag      string
 	skipDev  bool
-}
-
-// resume is what an earlier run recorded, and whether to override a mismatch.
-type resume struct {
-	published []string
-	force     bool
 }
 
 func (s settings) defaults() settings {
@@ -616,7 +617,7 @@ func (c Image) tagPrefix(u unit) (string, error) {
 // what landed, and a local read costs nothing. done is true when every ref the
 // unit publishes is recorded at the digest the registry currently serves.
 func unitState(s settings, u unit, recorded registry.RecordedDigests) (done bool, err error) {
-	if s.resume == nil {
+	if len(s.recordedRefs) == 0 {
 		return false, nil
 	}
 	names, err := s.imageNames(u)
@@ -648,7 +649,7 @@ func unitState(s settings, u unit, recorded registry.RecordedDigests) (done bool
 					return false, nil
 				}
 				if _, known := digests[got]; !known {
-					if !s.resume.force {
+					if !s.force {
 						return false, fmt.Errorf(
 							"%s is published at %s; this release recorded %s. "+
 								"Pass --force to republish over it",

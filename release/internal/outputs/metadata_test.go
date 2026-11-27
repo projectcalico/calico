@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
@@ -37,6 +38,30 @@ type record struct {
 
 func (r *record) attest() ([]byte, error) {
 	return r.body, r.attestErr
+}
+
+func TestMetadataUpload(t *testing.T) {
+	t.Run("requires the steps the caller names", func(t *testing.T) {
+		u := MetadataUpload(t.TempDir(), nil, "images", "charts")
+		if diff := cmp.Diff([]string{"images", "charts"}, u.Requires); diff != "" {
+			t.Errorf("requires (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("is done once build writes the metadata", func(t *testing.T) {
+		dir := t.TempDir()
+		build := func() error { return BuildMetadata(&record{body: []byte("version: v3.30.0\n")}, dir) }
+		u := MetadataUpload(dir, build)
+		if err := u.Done(); err == nil {
+			t.Fatal("done before build ran")
+		}
+		if err := u.Handler.(distribution.Preparer).Action(); err != nil {
+			t.Fatalf("action: %v", err)
+		}
+		if err := u.Done(); err != nil {
+			t.Errorf("not done after build: %v", err)
+		}
+	})
 }
 
 func TestBuildMetadata(t *testing.T) {

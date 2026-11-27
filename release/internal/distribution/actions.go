@@ -62,6 +62,7 @@ func Node(u Upload, opts ...Option) plan.Node {
 		Name:     u.label(),
 		When:     func() bool { return !u.Skip },
 		Requires: u.Requires,
+		Done:     u.Done,
 		Validate: u.validate,
 		Do: func() error {
 			s, err := newSettings(artifactsStep, opts)

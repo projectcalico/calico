@@ -101,19 +101,21 @@ func ReleaseUpload(o ReleaseOptions, requires ...string) distribution.Upload {
 		requires = append(requires, outputs.ChecksumStep, outputs.MetadataStep)
 	}
 	requires = append(requires, branch.PushTagStep)
+	rel := Release{
+		Repo:   o.Repo,
+		Tag:    ver,
+		Notes:  o.Notes,
+		Draft:  o.Draft,
+		DryRun: o.DryRun,
+		Runner: o.Runner,
+	}
 	return distribution.Upload{
 		Name:     ReleaseStep,
 		Source:   o.Source,
 		Skip:     o.Skip,
 		Requires: requires,
-		Handler: Release{
-			Repo:   o.Repo,
-			Tag:    ver,
-			Notes:  o.Notes,
-			Draft:  o.Draft,
-			DryRun: o.DryRun,
-			Runner: o.Runner,
-		},
+		Handler:  rel,
+		Done:     func() error { return rel.Done(o.Source) },
 	}
 }
 
@@ -238,6 +240,54 @@ func (d Release) Publish(ctx context.Context, src string) error {
 		}
 	}
 	return gh.Publish(ctx, d.Tag, latest)
+}
+
+// Done fails unless the release exists, live when Draft is unset, with every
+// file in src attached in full. A draft published by hand counts: Create
+// refuses a live release, so a rerun could not redo it. GitHub serves a draft
+// only by listing.
+func (d Release) Done(src string) error {
+	gh, err := d.client()
+	if err != nil {
+		return fmt.Errorf("github client: %w", err)
+	}
+	ctx := context.Background()
+	find, missing := gh.Get, "no published "+d.Name()
+	if d.Draft {
+		find, missing = gh.forTag, "no "+d.Name()
+	}
+	rel, found, err := find(ctx, d.Tag)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return errors.New(missing)
+	}
+	if src == "" {
+		return nil
+	}
+	files, err := fsutil.ListFiles(src, AssetsFilter...)
+	if err != nil {
+		return fmt.Errorf("get files: %w", err)
+	}
+	attached, err := gh.assets(ctx, rel.GetID())
+	if err != nil {
+		return err
+	}
+	var incomplete []string
+	for _, f := range files {
+		a, err := NewAsset(f)
+		if err != nil {
+			return err
+		}
+		if _, complete := findAsset(attached, a); !complete {
+			incomplete = append(incomplete, a.Name())
+		}
+	}
+	if len(incomplete) > 0 {
+		return fmt.Errorf("%s lacks assets: %s", d.Name(), strings.Join(incomplete, ", "))
+	}
+	return nil
 }
 
 func (d Release) makeLatest(ctx context.Context) (bool, error) {

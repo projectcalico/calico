@@ -466,6 +466,71 @@ func testArchived(repoRoot string) []archives.DirSource {
 	}
 }
 
+func TestBuilt(t *testing.T) {
+	prev, prevArch := archived, archBinaries
+	archived = testArchived
+	archBinaries = func(repoRoot, arch string) []string {
+		return []string{filepath.Join(sourceDir(repoRoot, "alpha"), "alpha-linux-"+arch)}
+	}
+	t.Cleanup(func() { archived, archBinaries = prev, prevArch })
+
+	t.Run("every archived binary on disk passes", func(t *testing.T) {
+		repoRoot := t.TempDir()
+		writeBinary(t, repoRoot, "alpha", "alpha-linux-amd64")
+		writeBinary(t, repoRoot, "beta", "tool")
+		if err := Built(repoRoot, []string{"amd64"}); err != nil {
+			t.Fatalf("Built() = %v, want nil", err)
+		}
+	})
+
+	t.Run("a missing binary fails and names its component", func(t *testing.T) {
+		repoRoot := t.TempDir()
+		writeBinary(t, repoRoot, "alpha", "alpha-linux-amd64")
+		writeBinary(t, repoRoot, "beta", "some-other-tool")
+		err := Built(repoRoot, nil)
+		if err == nil || !strings.Contains(err.Error(), "beta tool binary") {
+			t.Fatalf("Built() = %v, want an error naming beta tool binary", err)
+		}
+	})
+
+	t.Run("a leftover for another arch fails and names the missing one", func(t *testing.T) {
+		repoRoot := t.TempDir()
+		writeBinary(t, repoRoot, "alpha", "alpha-linux-amd64")
+		writeBinary(t, repoRoot, "beta", "tool")
+		err := Built(repoRoot, []string{"amd64", "arm64"})
+		if err == nil || !strings.Contains(err.Error(), "alpha-linux-arm64") {
+			t.Fatalf("Built() = %v, want an error naming alpha-linux-arm64", err)
+		}
+	})
+}
+
+func TestE2EBuilt(t *testing.T) {
+	t.Run("an e2e binary in the output dir passes", func(t *testing.T) {
+		out := t.TempDir()
+		if err := os.MkdirAll(E2EDir(out), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(E2EDir(out), E2EComponent+"-linux-amd64"), []byte("x"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := E2EBuilt([]string{"amd64"}, out); err != nil {
+			t.Fatalf("E2EBuilt() = %v, want nil", err)
+		}
+	})
+
+	t.Run("an empty output dir fails", func(t *testing.T) {
+		if err := E2EBuilt([]string{"amd64"}, t.TempDir()); err == nil {
+			t.Fatal("E2EBuilt() = nil, want an error")
+		}
+	})
+
+	t.Run("no e2e-supported arch passes, since nothing is built", func(t *testing.T) {
+		if err := E2EBuilt([]string{"s390x"}, t.TempDir()); err != nil {
+			t.Fatalf("E2EBuilt() = %v, want nil", err)
+		}
+	})
+}
+
 func TestArchiveLaysOutTheBinDir(t *testing.T) {
 	repoRoot, dest := t.TempDir(), t.TempDir()
 	prev := archived

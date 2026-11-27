@@ -174,6 +174,42 @@ func TestTagUpload(t *testing.T) {
 		})
 	}
 
+	t.Run("a skipped push owes no tag, so is done without asking the remote", func(t *testing.T) {
+		u, rec := upload(PushTagOptions{Skip: true}, map[string]string{})
+		if err := u.Done(); err != nil {
+			t.Fatalf("Done() = %v, want nil", err)
+		}
+		if calls := gitCalls(rec); len(calls) != 0 {
+			t.Errorf("Done ran %v, want nothing", calls)
+		}
+	})
+
+	t.Run("done", func(t *testing.T) {
+		for _, tc := range []struct {
+			name     string
+			lsRemote string
+			wantErr  string
+		}{
+			{name: "a tag missing on the remote is not done", wantErr: "not on " + remote},
+			{name: "a remote tag at the local commit is done", lsRemote: fmt.Sprintf("%s\t%s", localSHA, ref)},
+			{name: "a remote tag at another commit is not done", lsRemote: fmt.Sprintf("%s\t%s", remoteSHA, ref), wantErr: remoteSHA},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				u, rec := upload(PushTagOptions{}, map[string]string{lsRemote: tc.lsRemote, resolveTag: localSHA, push: ""})
+				err := u.Done()
+				if tc.wantErr == "" && err != nil {
+					t.Fatalf("Done() = %v, want nil", err)
+				}
+				if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+					t.Fatalf("Done() = %v, want an error containing %q", err, tc.wantErr)
+				}
+				if slices.Contains(gitCalls(rec), push) {
+					t.Errorf("Done pushed (ran %v)", gitCalls(rec))
+				}
+			})
+		}
+	})
+
 	t.Run("a failed remote query pushes nothing", func(t *testing.T) {
 		u, rec := upload(PushTagOptions{}, map[string]string{push: ""})
 		if err := u.Handler.Publish(context.Background(), ""); err == nil {
