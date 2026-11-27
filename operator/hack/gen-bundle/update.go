@@ -52,7 +52,15 @@ const (
 	// noPreviousVersion is the value PREV_VERSION takes when this version
 	// replaces nothing.
 	noPreviousVersion = "0.0.0"
+
+	// releaseConfigName is the file, next to manifests/ and metadata/, that
+	// tells Red Hat's release pipeline which catalogs to add the bundle to.
+	releaseConfigName = "release-config.yaml"
 )
+
+// openShiftVersion matches one entry of --openshift-versions, which is also the
+// name of that version's catalog template, less the .yaml.
+var openShiftVersion = regexp.MustCompile(`^v\d+\.\d+$`)
 
 // unwantedAnnotation matches the operator-sdk metrics and scorecard test
 // annotations, which a certified bundle must not carry.
@@ -80,7 +88,7 @@ var updateBundleCommand = &cli.Command{
 		"a constant, put it in the base instead. The capability level is the exception: it is the claim we are certified\n" +
 		"against, so it is set here, behind --capabilities, rather than being editable in the base.",
 	Flags: []cli.Flag{
-		operatorDirFlag, versionFlag, prevVersionFlag, capabilitiesFlag, openShiftVersionsFlag,
+		operatorDirFlag, versionFlag, prevVersionFlag, channelFlag, capabilitiesFlag, openShiftVersionsFlag,
 		imageFlag, imageInspectFlag, manifestInspectFlag,
 	},
 	Action: func(ctx context.Context, c *cli.Command) error {
@@ -95,6 +103,7 @@ var updateBundleCommand = &cli.Command{
 			operatorDir:       c.String(operatorDirFlag.Name),
 			version:           version,
 			prevVersion:       c.String(prevVersionFlag.Name),
+			channel:           c.String(channelFlag.Name),
 			capabilities:      c.String(capabilitiesFlag.Name),
 			openShiftVersions: c.String(openShiftVersionsFlag.Name),
 		}, inspected)
@@ -169,11 +178,20 @@ type bundleConfig struct {
 	operatorDir       string
 	version           string
 	prevVersion       string
+	channel           string
 	capabilities      string
 	openShiftVersions string
 }
 
 func updateBundle(cfg bundleConfig, img image) error {
+	// Checked before anything is moved, so that a bad list does not leave a
+	// half-updated bundle behind.
+	openShiftVersions, err := parseOpenShiftVersions(cfg.openShiftVersions)
+	if err != nil {
+		return err
+	}
+	supported := openShiftVersionRange(openShiftVersions)
+
 	bundleRoot := filepath.Join(cfg.operatorDir, bundleDir)
 	versionDir := filepath.Join(bundleRoot, cfg.version)
 	if err := rearrangeBundle(bundleRoot, versionDir); err != nil {
@@ -182,10 +200,84 @@ func updateBundle(cfg bundleConfig, img image) error {
 	if err := updateCSV(filepath.Join(versionDir, "manifests", csvName), cfg.version, cfg.prevVersion, cfg.capabilities, img); err != nil {
 		return err
 	}
-	if err := updateDockerfile(cfg.operatorDir, cfg.version, cfg.openShiftVersions); err != nil {
+	if err := updateDockerfile(cfg.operatorDir, cfg.version, supported); err != nil {
 		return err
 	}
-	return updateAnnotations(filepath.Join(versionDir, "metadata", "annotations.yaml"), cfg.openShiftVersions)
+	if err := updateAnnotations(filepath.Join(versionDir, "metadata", "annotations.yaml"), supported); err != nil {
+		return err
+	}
+	return writeReleaseConfig(filepath.Join(versionDir, releaseConfigName), cfg.version, cfg.channel, openShiftVersions)
+}
+
+// parseOpenShiftVersions splits a comma-separated list of OpenShift versions,
+// e.g. "v4.20,v4.21,v5.0", in ascending order. The list, not a range, is the
+// input because release-config.yaml needs one catalog template per version.
+func parseOpenShiftVersions(value string) ([]string, error) {
+	var versions []string
+	var prev *semver.Version
+	for _, v := range strings.Split(value, ",") {
+		v = strings.TrimSpace(v)
+		if !openShiftVersion.MatchString(v) {
+			return nil, fmt.Errorf("openshift-versions %q: %q is not an OpenShift version such as v4.20; give a comma-separated list, not a range", value, v)
+		}
+		sv, err := semver.NewVersion(v)
+		if err != nil {
+			return nil, fmt.Errorf("openshift-versions %q: %w", value, err)
+		}
+		// Ascending, so that the first and last entries bound the range that
+		// openShiftVersionRange writes.
+		if prev != nil && !sv.GreaterThan(prev) {
+			return nil, fmt.Errorf("openshift-versions %q: list the versions once each, in ascending order", value)
+		}
+		prev = sv
+		versions = append(versions, v)
+	}
+	return versions, nil
+}
+
+// openShiftVersionRange gives the com.redhat.openshift.versions value for a
+// parsed --openshift-versions list. The Red Hat pipeline sends that value to
+// the catalog API, which accepts a comma-separated list only for OpenShift
+// 4.5-4.8, so the list becomes a range from its first entry to its last, or
+// =vX.Y for a single version (a lone vX.Y means that version and later).
+//
+// The range also covers any versions the list skips, e.g. v4.23 for
+// v4.22,v5.0. That only states what the bundle supports: release-config.yaml,
+// and the templates that ci.yaml maps, decide which catalogs get the bundle.
+func openShiftVersionRange(versions []string) string {
+	if len(versions) == 1 {
+		return "=" + versions[0]
+	}
+	return versions[0] + "-" + versions[len(versions)-1]
+}
+
+// writeReleaseConfig writes the release-config.yaml that Red Hat's release
+// pipeline reads once the bundle PR merges: it opens a follow-up PR that adds
+// the published bundle, by its registry.connect.redhat.com digest, to the
+// catalog template of each OpenShift version, and renders the catalogs. Without
+// this file nothing adds the bundle to any catalog.
+//
+// Each template gets an entry in the bundle's channel. defaultChannel names
+// that channel too, but the pipeline only applies it to a template it
+// creates; moving the default of an existing template takes a separate PR -
+// see bundle/README.md. The entry has a skipRange of <VERSION> and no
+// replaces: the previous version is in a different channel, and the skipRange
+// already upgrades from every earlier version. See
+// https://redhat-openshift-ecosystem.github.io/operator-pipelines/users/fbc_autorelease/
+func writeReleaseConfig(path, version, channel string, openShiftVersions []string) error {
+	var b strings.Builder
+	b.WriteString("---\ncatalog_templates:\n")
+	for _, v := range openShiftVersions {
+		fmt.Fprintf(&b, "  - template_name: %s.yaml\n", v)
+		fmt.Fprintf(&b, "    channels: [%s]\n", channel)
+		fmt.Fprintf(&b, "    defaultChannel: %s\n", channel)
+		fmt.Fprintf(&b, "    skipRange: \"<%s\"\n", version)
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	logrus.Infof("Wrote %s", path)
+	return nil
 }
 
 // rearrangeBundle moves the manifests and metadata that operator-sdk generated
@@ -364,7 +456,9 @@ func updateAnnotations(path, openShiftVersions string) error {
 			return line == "" || unwantedAnnotation.MatchString(line) || openShiftVersionsAnnotation.MatchString(line)
 		})
 		// Add required com.redhat.openshift.versions.
-		return append(lines, fmt.Sprintf("  com.redhat.openshift.versions: %s", openShiftVersions))
+		// Quoted, so that a value such as =v4.20 is read as a string by any
+		// YAML parser.
+		return append(lines, fmt.Sprintf("  com.redhat.openshift.versions: %q", openShiftVersions))
 	})
 	if err != nil {
 		return err
