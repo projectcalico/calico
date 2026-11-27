@@ -64,6 +64,11 @@ tickLoop:
 }
 
 func (t *Ticker) calculateDelay() time.Duration {
+	if t.MaxJitter <= 0 {
+		// rand.Int63n panics if its argument is not positive, so handle the
+		// no-jitter case (which the constructor allows) explicitly.
+		return t.MinDuration
+	}
 	jitter := time.Duration(rand.Int63n(int64(t.MaxJitter)))
 	delay := t.MinDuration + jitter
 	return delay
