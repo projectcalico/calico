@@ -19,6 +19,7 @@ import (
 
 	"github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -100,6 +101,77 @@ func TestPoolFamilies(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			g := gomega.NewWithT(t)
 			got, err := poolFamilies(tc.pools)
+			if tc.wantErr != "" {
+				g.Expect(err).To(gomega.MatchError(gomega.ContainSubstring(tc.wantErr)))
+				return
+			}
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			g.Expect(got).To(gomega.Equal(tc.want))
+		})
+	}
+}
+
+func testPod(name string, phase corev1.PodPhase, hostNetwork bool, ips ...string) corev1.Pod {
+	p := corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec:       corev1.PodSpec{HostNetwork: hostNetwork},
+		Status:     corev1.PodStatus{Phase: phase},
+	}
+	for _, ip := range ips {
+		p.Status.PodIPs = append(p.Status.PodIPs, corev1.PodIP{IP: ip})
+	}
+	return p
+}
+
+type podFamiliesTestCase struct {
+	name    string
+	pods    []corev1.Pod
+	want    []IPFamily
+	wantErr string
+}
+
+func TestPodFamilies(t *testing.T) {
+	for _, tc := range []podFamiliesTestCase{
+		{
+			name: "IPv4 pod network",
+			pods: []corev1.Pod{testPod("coredns", corev1.PodRunning, false, "10.244.1.5")},
+			want: []IPFamily{IPv4},
+		},
+		{
+			name: "dual-stack lists IPv4 first",
+			pods: []corev1.Pod{testPod("coredns", corev1.PodRunning, false, "fd00:10::5", "10.244.1.5")},
+			want: []IPFamily{IPv4, IPv6},
+		},
+		{
+			name: "host-networked pod on a dual-stack host doesn't add IPv6",
+			pods: []corev1.Pod{
+				testPod("kube-proxy", corev1.PodRunning, true, "10.0.0.4", "fd00:1::4"),
+				testPod("coredns", corev1.PodRunning, false, "10.244.1.5"),
+			},
+			want: []IPFamily{IPv4},
+		},
+		{
+			name: "pending and finished pods don't count",
+			pods: []corev1.Pod{
+				testPod("pending", corev1.PodPending, false, "fd00:10::6"),
+				testPod("done", corev1.PodSucceeded, false, "fd00:10::7"),
+				testPod("coredns", corev1.PodRunning, false, "10.244.1.5"),
+			},
+			want: []IPFamily{IPv4},
+		},
+		{
+			name:    "no pod-network pods",
+			pods:    []corev1.Pod{testPod("kube-proxy", corev1.PodRunning, true, "10.0.0.4")},
+			wantErr: "no IPPools found, and no running pod-network pod has an IP",
+		},
+		{
+			name:    "no pods",
+			wantErr: "no IPPools found, and no running pod-network pod has an IP",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := gomega.NewWithT(t)
+			got, err := podFamilies(tc.pods)
 			if tc.wantErr != "" {
 				g.Expect(err).To(gomega.MatchError(gomega.ContainSubstring(tc.wantErr)))
 				return
