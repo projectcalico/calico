@@ -414,6 +414,28 @@ describe('OmniFilter', () => {
         expect(screen.getByText(filters[1].label)).toBeInTheDocument();
     });
 
+    it('should select a checkbox option once when its label is clicked', () => {
+        const [filter] = filters;
+        const onChange = jest.fn();
+
+        render(
+            <OmniFilter
+                {...defaultProps}
+                onChange={onChange}
+                listType='checkbox'
+                showOperatorSelect={false}
+            />,
+        );
+
+        openPopover();
+        fireEvent.click(screen.getByText(filter.label));
+
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(onChange).toHaveBeenCalledWith(
+            expect.objectContaining({ filters: [filter] }),
+        );
+    });
+
     it('should render custom create button label', () => {
         const onChange = jest.fn();
         const onRequestSearch = jest.fn();
