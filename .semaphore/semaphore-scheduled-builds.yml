@@ -1758,8 +1758,11 @@ blocks:
           - ./.semaphore/cache-test-artifacts
       jobs:
         - name: "Node: kind-cluster tests"
+          # JOB_TIMEOUT_MINUTES is the fleet's watchdog, which captures a hung
+          # VM's console; the time limit leaves it room, and 15 minutes for VM
+          # creation retries.
           execution_time_limit:
-            minutes: 120
+            minutes: 150
           env_vars:
             - name: JOB_TIMEOUT_MINUTES
               value: "120"
