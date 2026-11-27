@@ -4,6 +4,8 @@ This file is **operational guidance** for agents working in Felix: how to build,
 
 For **architecture, invariants, and review criteria**, see [`felix/DESIGN.md`](./DESIGN.md) — the design index — and the per-topic sub-designs under [`felix/design/`](./design/). Do not look here for invariants; look there.
 
+For **vocabulary**, read [`felix/GLOSSARY.md`](./GLOSSARY.md) and the root [`GLOSSARY.md`](../GLOSSARY.md).
+
 ## Running Tests
 
 ### Unit Tests

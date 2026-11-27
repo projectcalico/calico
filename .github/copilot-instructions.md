@@ -12,6 +12,10 @@ This is the main **Project Calico** repository - an open-source container networ
 - Build System: Make + Docker-based reproducible builds
 - CI/CD: Semaphore CI with extensive end-to-end testing
 
+## Vocabulary
+
+Read [`GLOSSARY.md`](../GLOSSARY.md) and the `GLOSSARY.md` beside the component you are changing, and use the canonical word each entry gives. Never coin a term yourself: when a concept has no name in the glossaries or the code, ask the user to name it, and add the entry to the right `GLOSSARY.md` in the same PR.
+
 ## Build Instructions
 
 ### Prerequisites
