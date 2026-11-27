@@ -344,6 +344,14 @@ The `CALI_CT_MID_FLOW_MISS` → `CALI_CT_MAGLEV_MID_FLOW_MISS` transition
 in `calico_tc_maglev` is what propagates the "this was a mid-flow
 miss, go through the new-flow path" signal to the rest of the chain.
 
+An ICMP error for a Maglev VIP whose inner flow has no CT entry here
+(ECMP sent it to the wrong node) is resolved statelessly: the reversed
+inner tuple is hashed through the LUT and the error is forwarded to
+the backend's node, whose CT entry delivers it. No CT state is created,
+and the flow's stored tunnel source on the backend node is unchanged.
+A miss for a local backend is left alone: that node would have the
+entry if the flow were real.
+
 ### Limitations
 
 - **DSR required.** Without DSR, return packets must go back through

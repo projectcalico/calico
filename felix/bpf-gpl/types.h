@@ -181,6 +181,10 @@ enum cali_state_flags {
 	/* CALI_ST_HOST_ORIGIN is set when a to-workload packet came from the
 	 * host namespace. */
 	CALI_ST_HOST_ORIGIN	  = 0x20000,
+	/* CALI_ST_RELATED_MISS is set when an ICMP error's inner packet has no
+	 * CT entry. For a Maglev VIP the backend is still recoverable, because
+	 * the LUT is the same on every node. */
+	CALI_ST_RELATED_MISS	  = 0x40000,
 };
 
 struct cali_tc_ctx {
