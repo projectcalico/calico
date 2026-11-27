@@ -496,15 +496,16 @@ steps:
       context: "/cache/windows-build/${COMPONENT}"
       buildArgsFile: "build-args-${WINVER}"
       platform: windows/amd64
-      tag: "${COMPONENT}-windows:${WINVER}"
+      # Windows FV retags the imported image from this ref.
+      tag: "${IMAGE}:latest"
       tar: /cache/windows-image/image.tar
     matrix:
-      - {name: node-ltsc2019, env: [{name: COMPONENT, value: node}, {name: WINVER, value: ltsc2019}]}
-      - {name: node-ltsc2022, env: [{name: COMPONENT, value: node}, {name: WINVER, value: ltsc2022}]}
-      - {name: node-ltsc2025, env: [{name: COMPONENT, value: node}, {name: WINVER, value: ltsc2025}]}
-      - {name: cni-ltsc2019, env: [{name: COMPONENT, value: cni-plugin}, {name: WINVER, value: ltsc2019}]}
-      - {name: cni-ltsc2022, env: [{name: COMPONENT, value: cni-plugin}, {name: WINVER, value: ltsc2022}]}
-      - {name: cni-ltsc2025, env: [{name: COMPONENT, value: cni-plugin}, {name: WINVER, value: ltsc2025}]}
+      - {name: node-ltsc2019, env: [{name: COMPONENT, value: node}, {name: IMAGE, value: node-windows}, {name: WINVER, value: ltsc2019}]}
+      - {name: node-ltsc2022, env: [{name: COMPONENT, value: node}, {name: IMAGE, value: node-windows}, {name: WINVER, value: ltsc2022}]}
+      - {name: node-ltsc2025, env: [{name: COMPONENT, value: node}, {name: IMAGE, value: node-windows}, {name: WINVER, value: ltsc2025}]}
+      - {name: cni-ltsc2019, env: [{name: COMPONENT, value: cni-plugin}, {name: IMAGE, value: cni-windows}, {name: WINVER, value: ltsc2019}]}
+      - {name: cni-ltsc2022, env: [{name: COMPONENT, value: cni-plugin}, {name: IMAGE, value: cni-windows}, {name: WINVER, value: ltsc2022}]}
+      - {name: cni-ltsc2025, env: [{name: COMPONENT, value: cni-plugin}, {name: IMAGE, value: cni-windows}, {name: WINVER, value: ltsc2025}]}
 
   # Named as the images' consumers look for them.
   - name: build-windows-images
