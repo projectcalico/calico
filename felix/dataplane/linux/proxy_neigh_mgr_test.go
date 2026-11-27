@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/ipv6"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
@@ -1135,6 +1136,15 @@ var _ = Describe("Proxy NDP manager - link-local address change", func() {
 
 		Expect(mgr.listeners["eth0"]).To(BeIdenticalTo(first))
 		Expect(created).To(HaveLen(1))
+	})
+
+	It("drops the listener when its bound link-local fails DAD", func() {
+		setIfaceAddr(nl, "eth0", "fd00::1/64", "fe80::1/64")
+		nl.NameToLink["eth0"].Addrs[1].Flags = unix.IFA_F_TENTATIVE | unix.IFA_F_DADFAILED
+		listenErr = errors.New("bind: cannot assign requested address")
+		sendIfaceAddrsUpdate(mgr, "eth0", "fd00::1")
+		Expect(mgr.CompleteDeferredWork()).To(MatchError(listenErr))
+		Expect(mgr.listeners).NotTo(HaveKey("eth0"))
 	})
 
 	It("retries the listener until the new link-local is usable", func() {

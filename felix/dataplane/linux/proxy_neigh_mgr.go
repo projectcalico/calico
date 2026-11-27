@@ -1074,20 +1074,20 @@ func (m *proxyNeighManager) refreshHostIface(ifaceName string) {
 }
 
 // failListenerIfAddrRemoved marks ifaceName's NDP listener failed, so it is
-// recreated, when its bound address is not in addrs.
+// recreated, when its bound address is missing from addrs or dadfailed.
 func (m *proxyNeighManager) failListenerIfAddrRemoved(ifaceName string, addrs []netlink.Addr) {
 	l, ok := m.listeners[ifaceName]
 	if !ok || m.ipVersion != 6 {
 		return
 	}
 	for _, a := range addrs {
-		if a.IPNet != nil && a.IP.Equal(l.boundAddr.AsSlice()) {
+		if a.IPNet != nil && a.Flags&unix.IFA_F_DADFAILED == 0 && a.IP.Equal(l.boundAddr.AsSlice()) {
 			return
 		}
 	}
 	logrus.WithFields(logrus.Fields{
 		"iface": ifaceName,
 		"addr":  l.boundAddr,
-	}).Info("Proxy NDP listener's bound address was removed; recreating listener")
+	}).Info("Proxy NDP listener's bound address was removed or failed DAD; recreating listener")
 	l.failed.Store(true)
 }
