@@ -153,6 +153,38 @@ var _ = Describe("BPF workload remove conntrack scanner", func() {
 	})
 })
 
+var _ = Describe("BPF Conntrack constructors", func() {
+	It("should store the original source IP in IPv4 NAT reverse SNAT values", func() {
+		tunnelIP := net.IPv4(1, 2, 3, 4)
+		origIP := net.IPv4(5, 6, 7, 8)
+		origSrcIP := net.IPv4(9, 10, 11, 12)
+
+		v2Val := v2.NewValueNATReverseSNAT(0, 0, 0, v2.Leg{}, v2.Leg{}, tunnelIP, origIP, origSrcIP, 1234)
+		v3Val := v3.NewValueNATReverseSNAT(0, 0, v3.Leg{}, v3.Leg{}, tunnelIP, origIP, origSrcIP, 1234)
+		v4Val := v4.NewValueNATReverseSNAT(0, 0, v4.Leg{}, v4.Leg{}, tunnelIP, origIP, origSrcIP, 1234)
+
+		Expect(v2Val.OrigSrcIP().Equal(origSrcIP)).To(BeTrue(), "v2 NAT reverse SNAT orig src")
+		Expect(v3Val.OrigSrcIP().Equal(origSrcIP)).To(BeTrue(), "v3 NAT reverse SNAT orig src")
+		Expect(v4Val.OrigSrcIP().Equal(origSrcIP)).To(BeTrue(), "v4 NAT reverse SNAT orig src")
+	})
+
+	It("should store the original source IP in IPv6 NAT reverse SNAT values", func() {
+		tunnelIP := net.ParseIP("2001:db8::1")
+		origIP := net.ParseIP("2001:db8::2")
+		origSrcIP := net.ParseIP("2001:db8::3")
+
+		v3Val := v3.NewValueV6NATReverseSNAT(0, 0, v3.Leg{}, v3.Leg{}, tunnelIP, origIP, origSrcIP, 1234)
+		v4Val := v4.NewValueV6NATReverseSNAT(0, 0, v4.Leg{}, v4.Leg{}, tunnelIP, origIP, origSrcIP, 1234)
+
+		Expect(v3Val.OrigIP().Equal(origIP)).To(BeTrue(), "v3 IPv6 NAT reverse original destination")
+		Expect(v3Val.OrigSrcIP().Equal(origSrcIP)).To(BeTrue(), "v3 IPv6 NAT reverse SNAT orig src")
+		Expect(v3Val.Data().TunIP.Equal(tunnelIP)).To(BeTrue(), "v3 IPv6 NAT reverse tunnel IP")
+		Expect(v4Val.OrigIP().Equal(origIP)).To(BeTrue(), "v4 IPv6 NAT reverse original destination")
+		Expect(v4Val.OrigSrcIP().Equal(origSrcIP)).To(BeTrue(), "v4 IPv6 NAT reverse SNAT orig src")
+		Expect(v4Val.Data().TunIP.Equal(tunnelIP)).To(BeTrue(), "v4 IPv6 NAT reverse tunnel IP")
+	})
+})
+
 type dummyNATChecker struct {
 	check func(fIP net.IP, fPort uint16, bIP net.IP, bPort uint16, proto uint8) bool
 }
