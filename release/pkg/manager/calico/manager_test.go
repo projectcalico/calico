@@ -2273,11 +2273,6 @@ func TestPublishRelease(t *testing.T) {
 		}
 	})
 
-	const (
-		lsRemoteTag = "git ls-remote origin refs/tags/v3.30.0 refs/tags/v3.30.0^{}"
-		resolveTag  = "git rev-parse --verify --quiet refs/tags/v3.30.0^{commit}"
-		tagCommit   = "1111111111111111111111111111111111111111"
-	)
 	for _, step := range []string{outputs.MetadataStep, outputs.ChecksumStep} {
 		t.Run("skipping "+step+" while what it requires runs fails as stale before anything publishes", func(t *testing.T) {
 			published := false
