@@ -356,9 +356,10 @@ func (ns *nodeService) unmount(dir, volumeID string) error {
 		err = syscall.Unmount(dir, 0)
 		if err != nil {
 			log.WithError(err).WithField("directory", dir).Error("Failed to unmount csidriver directory")
+			err = fmt.Errorf("tmpfs: %w", err)
 			if bindErr != nil {
 				// The tmpfs is busy for as long as the bind mount stays on it.
-				return fmt.Errorf("failed to unmount %s: %w: failed to unmount %s: %w", dir, err, bindDir, bindErr)
+				err = fmt.Errorf("%w; nodeagent bind mount: %w", err, bindErr)
 			}
 			return err
 		}
