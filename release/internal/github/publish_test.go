@@ -16,6 +16,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -237,6 +238,61 @@ func TestReleasePublish(t *testing.T) {
 // LatestTag returns an empty string when a repository has no published
 // release. Parsing that as a version fails, so a first release could never
 // be published.
+func TestReleaseDone(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		draft   bool
+		fake    func(*fakeReleases)
+		wantErr string
+	}{
+		{
+			name: "a published release is done",
+			fake: func(f *fakeReleases) {
+				f.byTag = map[string]*github.RepositoryRelease{"v3.30.0": {TagName: github.String("v3.30.0")}}
+			},
+		},
+		{
+			name:    "a draft is not done",
+			fake:    func(f *fakeReleases) { f.draft("v3.30.0", &github.RepositoryRelease{Draft: github.Bool(true)}) },
+			wantErr: "no published",
+		},
+		{name: "no release is not done", fake: func(*fakeReleases) {}, wantErr: "no published"},
+		{
+			name:  "a draft is done when the release is a draft",
+			draft: true,
+			fake:  func(f *fakeReleases) { f.draft("v3.30.0", &github.RepositoryRelease{Draft: github.Bool(true)}) },
+		},
+		{
+			name:  "a draft published by hand is done when the release is a draft",
+			draft: true,
+			fake: func(f *fakeReleases) {
+				f.byTag = map[string]*github.RepositoryRelease{"v3.30.0": {TagName: github.String("v3.30.0")}}
+			},
+		},
+		{name: "no draft is not done", draft: true, fake: func(*fakeReleases) {}, wantErr: "no v3.30.0 github release"},
+		{
+			name:    "a failed lookup is not done",
+			fake:    func(f *fakeReleases) { f.getErr = errors.New("rate limited") },
+			wantErr: "rate limited",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeReleases{}
+			tc.fake(f)
+			err := Release{releases: testReleases(t, f), Tag: "v3.30.0", Draft: tc.draft}.Done()
+			if tc.wantErr == "" && err != nil {
+				t.Fatalf("Done() = %v, want nil", err)
+			}
+			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+				t.Fatalf("Done() = %v, want an error containing %q", err, tc.wantErr)
+			}
+			if f.created != nil || f.edited != nil {
+				t.Error("Done changed a release")
+			}
+		})
+	}
+}
+
 func TestReleaseMakeLatest(t *testing.T) {
 	for _, tc := range []struct {
 		name      string

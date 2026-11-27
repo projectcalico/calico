@@ -101,19 +101,21 @@ func ReleaseUpload(o ReleaseOptions, requires ...string) distribution.Upload {
 		requires = append(requires, outputs.ChecksumStep, outputs.MetadataStep)
 	}
 	requires = append(requires, branch.PushTagStep)
+	rel := Release{
+		Repo:   o.Repo,
+		Tag:    ver,
+		Notes:  o.Notes,
+		Draft:  o.Draft,
+		DryRun: o.DryRun,
+		Runner: o.Runner,
+	}
 	return distribution.Upload{
 		Name:     ReleaseStep,
 		Source:   o.Source,
 		Skip:     o.Skip,
 		Requires: requires,
-		Handler: Release{
-			Repo:   o.Repo,
-			Tag:    ver,
-			Notes:  o.Notes,
-			Draft:  o.Draft,
-			DryRun: o.DryRun,
-			Runner: o.Runner,
-		},
+		Handler:  rel,
+		Done:     rel.Done,
 	}
 }
 
@@ -238,6 +240,35 @@ func (d Release) Publish(ctx context.Context, src string) error {
 		}
 	}
 	return gh.Publish(ctx, d.Tag, latest)
+}
+
+// Done fails unless the release exists, live when Draft is unset. A draft
+// published by hand counts: Create refuses a live release, so a rerun could not
+// redo it. GitHub serves a draft only by listing.
+func (d Release) Done() error {
+	gh, err := d.client()
+	if err != nil {
+		return fmt.Errorf("github client: %w", err)
+	}
+	ctx := context.Background()
+	if !d.Draft {
+		_, found, err := gh.Get(ctx, d.Tag)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("no published %s", d.Name())
+		}
+		return nil
+	}
+	_, found, err := gh.forTag(ctx, d.Tag)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("no %s", d.Name())
+	}
+	return nil
 }
 
 func (d Release) makeLatest(ctx context.Context) (bool, error) {

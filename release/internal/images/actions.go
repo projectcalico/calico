@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/env"
 	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/steps"
 )
@@ -138,7 +139,7 @@ var publishEnv = func(s settings) []string {
 
 // confirm latches the push: without it the make targets run as a dry run, so it
 // is an argument rather than an option a caller can forget.
-func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve registry.DigestResolver, opts ...PublishOption) error {
+func Publish(repoRoot, version string, variants []Variant, recordsDir string, confirm bool, resolve registry.DigestResolver, opts ...PublishOption) error {
 	s, err := newSettings(PublishStep, repoRoot, version, variants, opts)
 	if err != nil {
 		return err
@@ -151,10 +152,19 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 	}
 	s.resolve = resolve
 	s.confirm = confirm
+	// A dry run reaches no registry, so anything it recorded would claim images
+	// exist when they do not.
 	if !confirm {
-		// A dry run reaches no registry, so anything it recorded would claim
-		// images exist when they do not.
 		s.refs = nil
+	} else if err := s.useRecordsDir(recordsDir, PublishStep); err != nil {
+		return err
+	}
+	// An earlier run of this release records what it published, so a resume
+	// skips the units already done.
+	if recordsDir != "" {
+		if s.recordedRefs, err = outputs.ReadRefs(recordsDir, PublishStep); err != nil {
+			return s.Errorf("read published image refs: %w", err)
+		}
 	}
 
 	unscanned, depErr := s.runDependencies()
@@ -187,9 +197,22 @@ func Publish(repoRoot, version string, variants []Variant, confirm bool, resolve
 	return nil
 }
 
+// A wrapping step's own recorder wins: it records under that step's name.
+func (s *settings) useRecordsDir(recordsDir, step string) error {
+	if s.refs != nil || recordsDir == "" {
+		return nil
+	}
+	refs, err := outputs.NewRefsWriter(recordsDir, step)
+	if err != nil {
+		return s.Errorf("%w", err)
+	}
+	s.refs = refs
+	return nil
+}
+
 // Resolve records already published images a release uses.
 // A missing image fails only once the rest are recorded.
-func Resolve(repoRoot, version string, variants []Variant, resolve registry.DigestResolver, opts ...ResolveOption) error {
+func Resolve(repoRoot, version string, variants []Variant, recordsDir string, resolve registry.DigestResolver, opts ...ResolveOption) error {
 	s, err := newSettings(ResolveStep, repoRoot, version, variants, opts)
 	if err != nil {
 		return err
@@ -202,6 +225,10 @@ func Resolve(repoRoot, version string, variants []Variant, resolve registry.Dige
 	}
 
 	s.resolve = resolve
+	// A resolve reaches the registry, so it records what it finds.
+	if err := s.useRecordsDir(recordsDir, ResolveStep); err != nil {
+		return err
+	}
 
 	unscanned, depErr := s.runDependencies()
 	units := s.units(s.env())
@@ -316,10 +343,10 @@ func (s settings) unitStateAgainst(recorded registry.RecordedDigests) func(unit)
 // pending drops the units an earlier run already published, so a release
 // interrupted partway resumes on what is left.
 func pending(s settings, units []unit) ([]unit, error) {
-	if s.resume == nil {
+	if len(s.recordedRefs) == 0 {
 		return units, nil
 	}
-	recorded := registry.DigestsByRepo(s.resume.published)
+	recorded := registry.DigestsByRepo(s.recordedRefs)
 	done, err := steps.Go(units, s.unitStateAgainst(recorded))
 	if err != nil {
 		return nil, err
