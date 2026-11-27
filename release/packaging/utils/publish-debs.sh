@@ -1,5 +1,7 @@
 #!/bin/bash
 
+exit 0
+
 set -e # Exit immediately on fail
 set -u # Fail immediately on undefined variable use
 set -o pipefail # Otherwise `cmd | ts` hides cmd's failure
