@@ -188,6 +188,12 @@ stream, and its drops are explicit and countable.
   BPF and userspace. The reader in `felix/bpf/events/` and any
   downstream collector (Goldmane, syslog shipper) need to be
   updated in step.
+- A policy-verdict event records in `transit_policy_hits` how many
+  of its leading hits are the host endpoint's pre-DNAT and
+  apply-on-forward policy's, since rule IDs cannot tell them from
+  the endpoint's own. `felix/bpf/events/` drops them, so a
+  policy-program change that adds an exit from those sections must
+  record the count there.
 - New event types go in `events_type.h` (new enum value) and
   need a handler on the reader side. Emitting an unknown type
   leaves it at "ignored" in userspace — silent data loss.
