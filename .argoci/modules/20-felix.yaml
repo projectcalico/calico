@@ -27,40 +27,76 @@ steps:
 
   # Every FV VM unpacks this step's output, so a lane whose batches all fail to
   # configure usually broke here.
+  # The felix-test image is the FV hosts' test environment, not Felix: its inputs
+  # are the docker-image directory and the bpftool image alone.
+  - name: stage-felix-test-image
+    useGoBuild: true
+    timeout: 10m
+    jobSize: small
+    changes: &felix-test-image-changes
+      dependsOn: [felix]
+    cache:
+      - {name: felix-test-ctx, mode: write, path: /cache/felix-test-ctx}
+    commands: |
+      cp -a felix/docker-image/. /cache/felix-test-ctx/
+      make -s --no-print-directory -C felix \
+        --eval='print-build-args: ; @echo BPFTOOL_IMAGE=$(BPFTOOL_IMAGE); echo GIT_VERSION=$(GIT_VERSION)' \
+        print-build-args >/cache/felix-test-ctx/build-args
+      cat /cache/felix-test-ctx/build-args
+
+  - name: build-felix-test-image
+    depends: [stage-felix-test-image]
+    changes: *felix-test-image-changes
+    cache:
+      - {name: felix-test-ctx, mode: read, path: /cache/felix-test-ctx}
+      - {name: felix-test-image, mode: write, path: /cache/felix-test-image}
+    buildkit:
+      context: /cache/felix-test-ctx
+      buildArgsFile: build-args
+      tag: calico/felix-test:latest-amd64
+      tar: /cache/felix-test-image/felix-test.tar
+
+  # Every FV VM unpacks this step's output, so a lane whose batches all fail to
+  # configure usually broke here.
   - name: felix-build
     env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
       - name: CALICO_IMAGE_TAR
         value: /cache/calico-image/calico.tar
-      - name: CALICO_BUILD_DIR
-        value: /cache/calico-build
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    depends: [build-calico-image, check-go, felix-fv-plan]
+      - name: FELIX_TEST_IMAGE_TAR
+        value: /cache/felix-test-image/felix-test.tar
+    useGoBuild: true
+    depends: [build-calico-image, build-felix-test-image, check-go, felix-fv-plan]
     timeout: 40m
     jobSize: large
     requests: {cpu: 7000m, memory: 10Gi}
-    services:
-      - docker
     secretBundles:
       - name: google-service-account-for-gce
         keys:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
+    goCache: read
+    # The two images go up for the FV VMs to load, and libbpf, which is C, comes
+    # from the calico build; the Go builds here, against go-cache's disk.
     cache:
       - {name: calico-build, mode: read, path: /cache/calico-build}
       - {name: calico-image, mode: read, path: /cache/calico-image}
+      - {name: felix-test-image, mode: read, path: /cache/felix-test-image}
     commands: |
       artifact pull workflow felix-fv-plan
       if [ "$(cat felix-fv-plan/build)" = skip ]; then
         echo "Every FV lane passed on an earlier run of this PR with the same inputs; nothing to build."
       else
         source .argoci/scripts/vm-fleet-setup.sh
-        .argoci/scripts/load-cached-images calico
-        .semaphore/scripts/load-felix-prereqs.sh
+        tar -xf /cache/calico-build/libbpf-amd64.tar -C felix/bpf-gpl
         cd felix
-        # REMOTE_DEPS= reuses the cached image. Not `make build`, which also
-        # cross-compiles the Windows binary.
-        make REMOTE_DEPS= bin/calico-felix image ut-bpf-prereqs fv-prereqs
+        # The felix-test image comes from buildkit, so fv-prereqs' image target is
+        # spelled out without it. Not `make build`, which also cross-compiles the
+        # Windows binary.
+        fv_binary=$(make -s --no-print-directory --eval='print-fv-binary: ; @echo $(FV_BINARY)' print-fv-binary)
+        make REMOTE_DEPS= bin/calico-felix ut-bpf-prereqs "$fv_binary" \
+          bin/test-workload bin/test-connection bin/calico-bpf bin/pktgen build-bpf fv/fv.test
         ./.semaphore/cache-test-artifacts
       fi
 
