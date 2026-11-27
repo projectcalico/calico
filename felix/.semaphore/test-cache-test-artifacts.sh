@@ -94,18 +94,23 @@ check "cache hit downloads from S3" grep -q "^s3cmd .* get --force " "$stub_log"
 check "cache hit does not save calico image" test "$(grep -c 'docker save -o /tmp/calico-image.tar ' "$stub_log")" = 0
 check "cache hit uploads to GCS" grep -q "^gcloud storage cp /tmp/calico-image.tar.zst gs://" "$stub_log"
 
-# 2b. Under ArgoCI the image is a local tar: compressed from it, not fetched or
-#     re-saved.
+# 2b. Under ArgoCI both images are local tars: uploaded as they are, with no
+#     docker or zstd, since the go-build image it runs in has neither a daemon
+#     nor zstd.
 : >"$work/calico.tar"
-CALICO_IMAGE_TAR="$work/calico.tar" CI_ARTIFACT_STORAGE=gs://bucket/run run
+: >"$work/felix-test.tar"
+CALICO_IMAGE_TAR="$work/calico.tar" FELIX_TEST_IMAGE_TAR="$work/felix-test.tar" CI_ARTIFACT_STORAGE=gs://bucket/run run
 rc=$?
-check "local image tar RC=0" [ "$rc" = 0 ]
-check "local image tar is compressed" grep -q "^zstd -3 -T0 -o /tmp/calico-image.tar.zst $work/calico.tar" "$stub_log"
-check "local image tar is not fetched" test "$(grep -c -E '^(artifact pull|s3cmd)' "$stub_log")" = 0
-check "local image tar is not re-saved" test "$(grep -c 'docker save -o /tmp/calico-image.tar ' "$stub_log")" = 0
+check "local image tars RC=0" [ "$rc" = 0 ]
+check "local calico tar uploaded as is" grep -q "^gcloud storage cp $work/calico.tar gs://.*/calico-image.tar$" "$stub_log"
+check "local image tars are not fetched" test "$(grep -c -E '^(artifact pull|s3cmd)' "$stub_log")" = 0
+check "local image tars use no docker" test "$(grep -c '^docker ' "$stub_log")" = 0
+check "local image tars use no zstd" test "$(grep -c '^zstd ' "$stub_log")" = 0
 
-# 3. The felix-test image is saved either way — it is this job's own output.
-check "felix-test image always saved" grep -q "^docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64" "$stub_log"
+# 3. Without a local tar the felix-test image is saved from the daemon — it is
+#    this job's own output.
+CURL_FAIL=1 run
+check "felix-test image saved from the daemon" grep -q "^docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64" "$stub_log"
 
 rm -f /tmp/calico-image.tar /tmp/calico-image.tar.zst
 echo "FAILURES: $fails"

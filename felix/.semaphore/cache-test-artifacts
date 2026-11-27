@@ -29,12 +29,6 @@ set -x
 S3_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.semaphore/s3-cmd"
 
 fetch_calico_image() {
-  # ArgoCI keeps the image on a cache disk rather than in the artifact store.
-  if [ -n "${CALICO_IMAGE_TAR:-}" ]; then
-    rm -rf /tmp/calico-image.tar.zst
-    zstd -3 -T0 -o /tmp/calico-image.tar.zst "${CALICO_IMAGE_TAR}"
-    return
-  fi
   if [ -n "${CI_ARTIFACT_STORAGE:-}" ]; then
     ( cd /tmp && artifact pull workflow calico-image.tar.zst )
     return
@@ -43,7 +37,12 @@ fetch_calico_image() {
 }
 
 artifact push job bin &
-docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
+# ArgoCI builds the image with buildkit, which writes a tar rather than loading it.
+if [ -n "${FELIX_TEST_IMAGE_TAR:-}" ]; then
+  cp "${FELIX_TEST_IMAGE_TAR}" /tmp/calico-felix-test.tar
+else
+  docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
+fi
 
 # The combined calico image (which provides Typha and other components used by
 # the FVs) is published by the block that builds it. Fetch it and re-upload it
@@ -56,12 +55,18 @@ docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
 # the daemon. load-test-artifacts on the VM needs this tarball unconditionally,
 # so `docker save` failing here (no cached copy and no local image) is the right
 # loud failure.
-if ! fetch_calico_image; then
-  echo "No calico image in the workflow cache; saving the local image instead"
-  docker save -o /tmp/calico-image.tar calico/calico:latest-amd64
-  zstd -3 --rm /tmp/calico-image.tar
+# ArgoCI keeps the image as a tar on a cache disk. It goes up uncompressed: the
+# go-build image this runs in has no zstd, and the copy stays in-region.
+if [ -n "${CALICO_IMAGE_TAR:-}" ]; then
+  gcloud storage cp "${CALICO_IMAGE_TAR}" "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/calico-image.tar"
+else
+  if ! fetch_calico_image; then
+    echo "No calico image in the workflow cache; saving the local image instead"
+    docker save -o /tmp/calico-image.tar calico/calico:latest-amd64
+    zstd -3 --rm /tmp/calico-image.tar
+  fi
+  gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/calico-image.tar.zst"
 fi
-gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/calico-image.tar.zst"
 
 cd ../..
 
