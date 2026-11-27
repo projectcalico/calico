@@ -17,24 +17,16 @@ The client library turns a Typha connection back into the local
 [Syncer API](../../design/syncer/DESIGN.md): the consumer hands
 `syncclient.New` its `api.SyncerCallbacks` and receives a stream
 equivalent to an in-process syncer's (Typha may reorder and
-coalesce, within the API's eventual-consistency contract).
-Consumers: Felix (`felix/daemon/daemon.go`, wired directly), and
-— via the `syncclientutils.MustStartSyncerClientIfTyphaConfigured`
-helper, which falls back to an in-process syncer when Typha isn't
-configured — confd's BGP client and the `node` tunnel-IP and
-node-status helpers. Each requests its `SyncerType` in the
-handshake ([`protocol.md`](./protocol.md)).
+coalesce, within the API's eventual-consistency contract). Each
+consumer requests its `SyncerType` in the handshake
+([`protocol.md`](./protocol.md)).
 
 ## The client (`pkg/syncclient`)
 
-`SyncerClient` runs the client side of the protocol: hello
-exchange, decoder restarts (swapping its decompressor and gob
-decoder for the algorithm the server chose, rejecting one it
-didn't advertise, and ACKing before the server continues),
-prompt `MsgPong` replies, and decoding `MsgKVs` back into
-`[]api.Update` batches for `OnUpdates`. Per-message read/write
-deadlines protect it from a hung server; the server's pings are
-what keep the read deadline fed when the datastore is quiet.
+The client detects a hung server with a read deadline. The
+server's pings arrive whether or not the datastore is changing,
+so a quiet datastore never trips it; a long silence means the
+server or the path to it is broken.
 
 **Reconnection requires restart-aware callbacks.** A dropped
 connection means a full resync — new handshake, fresh snapshot —
@@ -44,12 +36,11 @@ client reconnects only if the callbacks implement
 reconcile a fresh snapshot against what they already applied;
 otherwise it finishes. `dedupebuffer.DedupeBuffer` (see
 [`design/syncer/DESIGN.md`](../../design/syncer/DESIGN.md))
-implements this by diffing the new snapshot against the keys it
-had and synthesizing deletions for anything that vanished. Felix
-and `MustStartSyncerClientIfTyphaConfigured` both put one in
-front of the consumer, so every current consumer rides out Typha
-restarts. If reconnection fails outright, the helper `log.Fatal`s
-and the component restart does the resync.
+implements this: once the new snapshot is complete, it
+synthesizes deletions for keys the snapshot no longer contains.
+Every current consumer puts one in front of its callbacks, so all
+of them ride out Typha restarts. If reconnection fails outright,
+the component exits and its restart does the resync.
 
 ## Discovery (`pkg/discovery`)
 

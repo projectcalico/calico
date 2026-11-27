@@ -50,8 +50,7 @@ the two mechanisms that make that cheap.
 
 `daemon.TyphaDaemon` (`pkg/daemon/daemon.go`) loads config
 (Felix-style env-var/file layering, `pkg/config`), connects to
-the datastore (retrying forever — Typha is useless without it),
-and builds one pipeline per `SyncerType`, eagerly:
+the datastore, and builds one pipeline per `SyncerType`:
 
 ```
 syncer → SyncerCallbacksDecoupler → ValidationFilter
@@ -70,9 +69,8 @@ syncer → SyncerCallbacksDecoupler → ValidationFilter
   full, backpressure reaches the syncer, and the backlog
   accumulates in the datastore watcher, which can coalesce it.
 - `calc.ValidationFilter` validates each value and **nils out
-  invalid ones** (treating them as deletions) rather than
-  dropping batches or passing garbage on. One bad resource in
-  the datastore must not take out every Felix. v1-model values
+  invalid ones** (treating them as deletions): one bad resource
+  in the datastore must not take out every Felix. v1-model values
   are checked by `pkg/validator/v1` (dataplane validity, not API
   validation); v3 resources by the API validator, which in etcd
   mode also applies CRD schema defaults in place, as the API
@@ -104,30 +102,64 @@ requested in its handshake.
 
 The obvious cache — a big map guarded by a mutex — fails at
 scale: sending (or copying) a 500k-entry snapshot to a new client
-while holding the lock starves the writer. The design comment on
-`snapcache.Cache` is the canonical statement of the scheme used
-instead:
+while holding the lock starves the writer. Instead, the cache
+publishes a linked list of immutable **breadcrumbs**. Crumb *N*
+holds two things:
 
-- The cache's single main goroutine applies updates to a
-  **copy-on-write B-tree** whose entries are already-serialized
-  KVs (`syncproto.SerializedUpdate` — serialize once, fan out
-  many times; see [`protocol.md`](./protocol.md)).
-- After each batch (up to `MaxBatchSize`, default 100) it
-  publishes a **`Breadcrumb`**: an O(1) clone of the tree (the
-  point-in-time snapshot) plus the batch's deltas, appended to a
-  linked list of crumbs and announced on a single condition
-  variable.
-- Each client-handling goroutine looks after itself: it takes
-  the current crumb, sends its snapshot, then follows the `next`
-  pointers, sending only deltas. Following the list is a
-  non-blocking atomic-pointer walk; a client only touches the
-  condition variable when it has fully caught up. The writer
-  never waits for readers.
+- **`KVs`** — the *complete* datastore state as of crumb *N*: one
+  entry per key, already serialized (serialize once, send many
+  times; see [`protocol.md`](./protocol.md)). It is not a history.
+- **`Deltas`** — a plain slice of the updates that turned crumb
+  *N−1*'s state into crumb *N*'s.
 
-The design comment also records why *not* per-client channels:
-the bookkeeping to avoid one slow client blocking the rest
-(skipping, per-channel progress tracking) is fiddlier than
-letting each client walk an immutable list at its own pace.
+```mermaid
+flowchart LR
+    subgraph c41["Crumb 41"]
+        k41["KVs: state @41"]
+        d41["Deltas: 40→41"]
+    end
+    subgraph c42["Crumb 42"]
+        k42["KVs: state @42"]
+        d42["Deltas: 41→42"]
+    end
+    subgraph c43["Crumb 43 (current)"]
+        k43["KVs: state @43"]
+        d43["Deltas: 42→43"]
+    end
+    c41 -- next --> c42 -- next --> c43
+    old["Client A<br/>(connected at 41)"] -. "sends Deltas<br/>42, then 43" .-> c42
+    new["Client B<br/>(connects now)"] -. "sends KVs @43,<br/>then waits for 44" .-> c43
+```
+
+A client's goroutine takes whichever crumb is current when it
+connects, sends that crumb's `KVs` as its snapshot, then follows
+the `next` pointers sending only each crumb's `Deltas`. Each client
+walks the list at its own pace; the writer never waits for
+readers. Following an existing `next` pointer is a lock-free
+atomic load; a client that reaches the head blocks on one shared
+condition variable until the next crumb is published. Crumbs no
+client references any more are garbage collected.
+
+Giving every crumb a full snapshot is affordable because `KVs` is
+a **copy-on-write B-tree**. The cache's single main goroutine
+applies each batch (up to `MaxBatchSize`, default 100 updates) to
+its working tree, then `Clone()`s it into the new crumb. A clone
+shares every node with the original, so it costs O(1) regardless
+of tree size; the writer's later changes copy only the nodes on
+the path they touch:
+
+```mermaid
+flowchart TD
+    r42["Crumb 42 root"] --> a["node A"]
+    r42 --> b["node B"]
+    r43["Crumb 43 root"] --> a
+    r43 --> b2["node B′<br/>(copied when a key under B changed)"]
+```
+
+Per-client channels were rejected: keeping one slow client from
+blocking the rest needs skipping and per-channel progress
+tracking, which is fiddlier than letting each client walk an
+immutable list.
 
 The cache massages the stream so that what a late-joining client
 sees is still a valid syncer stream:
@@ -152,12 +184,12 @@ sees is still a valid syncer stream:
 
 ### Review notes
 
-- The publish ordering is load-bearing: the old crumb's `next`
-  pointer and the cache's current-crumb pointer are both set
-  under the condition-variable lock, `next` first, so a reader
-  that sees the new head can always walk to it from an older
-  crumb. Don't reorder, and don't touch a published crumb — every
-  field is immutable once the crumb is visible.
+- Publishing crumb *N* sets two pointers, under the
+  condition-variable lock and in this order: crumb *N−1*'s `next`,
+  then the cache's current crumb. A new client starting at the
+  current crumb therefore never sees a crumb that older clients
+  can't reach by walking `next`. Don't reorder, and don't touch a
+  published crumb — every field is immutable once it is visible.
 - Nothing may block the cache's main goroutine: no locks shared
   with per-client work, no I/O. It is the only writer.
 - The safe-approximation doctrine (above) applies to every
@@ -187,13 +219,14 @@ Mid-snapshot only the write deadline protects the server; the
 pong check starts with the delta stream. Two deliberate wrinkles,
 both from load testing:
 
-- Write deadlines are only reset when they've decayed below
-  `WriteTimeout` (with 10% slack) — per-message
-  `SetWriteDeadline` showed up in profiles.
-- While streaming the shared snapshot, a write timeout with
-  partial progress is retried, not fatal; only a stalled write
-  (zero bytes) kills the connection. Huge snapshot, slow-but-live
-  client is a case we must survive.
+- The write deadline is set to 1.1×`WriteTimeout` ahead and only
+  pushed out again once less than `WriteTimeout` remains —
+  calling `SetWriteDeadline` per message showed up in profiles.
+- While streaming the shared snapshot, a write that times out
+  after sending some bytes is resumed from where it stopped, with
+  a fresh deadline; only a write that sends nothing kills the
+  connection. The deadline thus detects a stalled client rather
+  than capping a huge snapshot's total send time.
 
 ### New-client snapshots: streamed vs shared
 
@@ -201,7 +234,7 @@ How a new client gets its snapshot depends on the negotiated
 features (see [`protocol.md`](./protocol.md) for the wire-level
 sequencing):
 
-- **Legacy path:** the KV-sender iterates the crumb's B-tree and
+- **Legacy path:** the KV-sender iterates the current crumb's `KVs` and
   gob-encodes every KV to that one client. Cost: a few seconds of
   CPU per client at 500k KVs — fine for one client, ruinous for a
   thundering herd (500 clients ≈ 25 CPU-minutes, i.e. tens of

@@ -23,8 +23,8 @@ The API is cross-component: it is defined in
 `libcalico-go/lib/backend/api`, implemented by the syncers in
 `libcalico-go/lib/backend/syncersv1/`, consumed by Felix's
 calculation graph, confd, the `node` helpers, kube-controllers and
-the apiserver, and extended
-over the network by Typha. This doc is the authoritative
+the apiserver, and proxied for scale by Typha. This doc is the
+authoritative
 statement of the API's contract; the consumers document their own
 side:
 
@@ -133,9 +133,9 @@ Two further properties:
 Each `Update` carries `UpdateType`
 (`UpdateTypeKVNew`/`KVUpdated`/`KVDeleted`/`KVUnknown`). Its
 purpose is stats-style bookkeeping without retaining objects
-(e.g. Felix's `calc/stats_collector.go`). **Don't drive
-correctness from it** — decide existence from nil/non-nil, not
-the update type. `UpdateTypeKVNew/Updated` can even carry a `nil`
+(e.g. Felix's `calc/stats_collector.go`). **Never use it to
+decide whether a key exists** — use nil/non-nil for that.
+`UpdateTypeKVNew/Updated` can even carry a `nil`
 value (failed validation in Typha or the consumer), so the type
 may disagree with the value. Intermediaries that coalesce updates
 must rewrite the type so that the *sequence* of types a consumer
@@ -151,18 +151,14 @@ The generic machinery is `libcalico-go/lib/backend/watchersyncer`
 — it runs one `watchercache` per resource type (list + watch
 against the backend client, in the style of a Kubernetes
 reflector) and merges the streams, computing the overall
-`SyncStatus`. The `watchercache`'s per-key revision map is where
-`UpdateType`s are minted: `KVNew` vs `KVUpdated` by whether the
-key was already announced, same-revision events swallowed, and
-`KVDeleted` only for previously-announced keys, so the
-`watchersyncer` never emits a deletion without an earlier `KVNew`
-(intermediaries may still forward deletions for keys whose
-earlier update they nil'd). The per-purpose syncers in
-`libcalico-go/lib/backend/syncersv1/` compose it with a resource
-list and, per resource, an optional `updateprocessor` that
-converts the v3 resource into v1 model keys. Unprocessed
-resources are delivered as v3 `ResourceKey`s, so consumers see a
-mix of both:
+`SyncStatus`. Each per-purpose syncer in
+`libcalico-go/lib/backend/syncersv1/` is a `watchersyncer`
+configured with a resource list and, per resource, an optional
+`updateprocessor` that converts the v3 resource into v1 model
+keys. Unprocessed resources are delivered as v3 `ResourceKey`s,
+so consumers see a mix of both.
+
+The syncers and their consumers:
 
 | Syncer | Consumer |
 |---|---|
@@ -174,23 +170,24 @@ mix of both:
 These four correspond one-to-one with Typha's `SyncerType`s
 (`typha/pkg/syncproto`): Typha runs each syncer once and fans it
 out, so consumers get the same streams without the datastore
-seeing one watcher per node. confd and the `node` helpers use
-`typha/pkg/syncclientutils.MustStartSyncerClientIfTyphaConfigured`
-to connect via Typha when configured and run the syncer
-in-process otherwise; Felix wires the Typha client itself. The
-callbacks see the same API either way.
+seeing one watcher per node. Each consumer connects via Typha
+when it is configured and runs the syncer in-process otherwise;
+the callbacks see the same API either way.
 
 kube-controllers (`controllers/utils.DataFeed`) and the apiserver
-also use `watchersyncer` directly, with their own resource lists,
-never via Typha.
+also use `watchersyncer` directly, with their own resource lists.
+They don't go via Typha: they run as one or a few replicas, so
+there is no per-node fan-out to save, and their resource lists
+don't match any of Typha's syncer types.
 
 `libcalico-go/lib/backend/syncersv1/dedupebuffer` is a
 `SyncerCallbacks` adaptor that sits between a syncer (or Typha
 client) and a slow consumer: it coalesces repeated updates to the
 same key while queueing, and it absorbs a Typha reconnection
-(`OnTyphaConnectionRestarted`): the new snapshot passes through
-(already-delivered keys as `KVUpdated`), and at `InSync` it
-synthesizes deletions for delivered keys the new snapshot lacked.
+(`OnTyphaConnectionRestarted`). The new snapshot passes through,
+with already-delivered keys rewritten to `KVUpdated`; at `InSync`
+the buffer synthesizes deletions for delivered keys the new
+snapshot lacked.
 The consumer sees the status drop back, but no spurious
 delete/re-create.
 

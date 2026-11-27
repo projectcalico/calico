@@ -95,11 +95,6 @@ their resource version *inside* the object, which would defeat
 the value comparison, so `SerializeUpdate` moves it out into the
 `V3ResourceVersion` field before serializing.
 
-Gob sends type information inline, per connection, which
-prevents splicing pre-encoded streams (see below). We keep it for
-compatibility; the decoder-restart mechanism is the escape hatch
-to a future encoding.
-
 ## Feature negotiation and decoder restart
 
 Gob defaults unknown fields to their zero value, so feature
@@ -110,12 +105,19 @@ return an error and kills the connection — hence the cardinal
 rule below.
 
 The one thing simple negotiation can't do is change the encoding
-mid-stream, because gob is stateful: it assigns per-connection
-type IDs, so you cannot splice one gob stream after another —
-the receiver rejects the duplicate type info or misparses. This
+mid-stream, because a gob stream is stateful. The first time an
+encoder sends a value of some Go type, it first sends a
+definition of that type and assigns it a numeric ID; later values
+of that type carry only the ID. The decoder remembers the IDs for
+the life of the stream. So bytes from a *different* encoder — for
+example a snapshot encoded once in advance — can't be appended to
+a live stream: they re-define types the decoder already knows (an
+error) or use IDs that mean something else on this stream. This
 blocked the obvious "serialize the snapshot once, replay the
 bytes to every client" optimisation, and is why the protocol has
-`MsgDecoderRestart`/`MsgACK`:
+`MsgDecoderRestart`/`MsgACK`, which start a fresh encoder/decoder
+pair mid-connection. The same mechanism is the escape hatch from
+gob to a future encoding.
 
 - `MsgDecoderRestart` is the last message of the old stream: the
   server closes the stream straight after it. The client discards
@@ -154,9 +156,13 @@ datamodels. The package comment spells out the cases; in brief:
 - **New resource type:** old Typha won't send it (client must
   tolerate absence); old client fails to parse it, and the client
   code drops the KV with a rate-limited log.
-- **Replacing one synthesized resource with another** does *not*
-  work across skew — the new one is stripped, the old one no
-  longer sent. That needs handshake gating.
+- **Replacing one resource type with another** in a single
+  release does *not* work across skew — the new one is stripped,
+  the old one no longer sent. Roll it out over releases instead,
+  waiting out the maximum supported version skew between steps:
+  1. Syncers send both the old and the new type.
+  2. Clients consume the new type instead of the old.
+  3. Syncers stop sending the old type; clean up.
 
 Two hard rules fall out of Typha's pass-through role:
 

@@ -158,8 +158,8 @@ writing a node. For a calc-graph node:
 
 Each event also carries `Update.UpdateType` (semantics in the
 shared doc). In Felix its only legitimate use is stats without
-retaining objects (`calc/stats_collector.go`). **Don't drive
-correctness from it** — decide existence from nil/non-nil.
+retaining objects (`calc/stats_collector.go`). **Never use it to
+decide whether a resource exists** — use nil/non-nil for that.
 
 ### Review notes
 
