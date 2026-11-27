@@ -17,6 +17,7 @@ package archives
 import (
 	"archive/tar"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -191,6 +192,24 @@ func BuildWindows(a Archive, opts ...WindowsOption) error {
 	}
 	s.Logger().WithField("dir", WindowsDir(s.OutputDir)).Info("Built Windows archive")
 	return nil
+}
+
+// Built fails unless the archive is on disk.
+func Built(a Archive) error {
+	return fsutil.FilePresent(Path(a))
+}
+
+func WindowsBuilt(a Archive) error {
+	var errs []error
+	for _, path := range []string{
+		filepath.Join(WindowsDir(a.OutputDir), WindowsFileName(a.Version)),
+		filepath.Join(WindowsScriptDir(a.OutputDir), windowsScript),
+	} {
+		if err := fsutil.FilePresent(path); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func newSettings[O any](step string, a Archive, validate func(a Archive) error, opts []O) (settings, error) {

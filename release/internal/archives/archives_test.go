@@ -327,6 +327,54 @@ func TestBuildWindowsPlacesBothFilesInTheOutputDir(t *testing.T) {
 	}
 }
 
+func TestBuilt(t *testing.T) {
+	a := Archive{Version: testVersion, OutputDir: t.TempDir()}
+
+	t.Run("fails before the archive is written", func(t *testing.T) {
+		if err := Built(a); err == nil {
+			t.Error("Built() = nil, want an error")
+		}
+	})
+
+	t.Run("passes once the archive is on disk", func(t *testing.T) {
+		writeFile(t, Path(a))
+		if err := Built(a); err != nil {
+			t.Errorf("Built() = %v", err)
+		}
+	})
+}
+
+func TestWindowsBuilt(t *testing.T) {
+	a := Archive{Version: testVersion, OutputDir: t.TempDir()}
+	zip := filepath.Join(WindowsDir(a.OutputDir), WindowsFileName(testVersion))
+	script := filepath.Join(WindowsScriptDir(a.OutputDir), windowsScript)
+
+	t.Run("fails without the install script", func(t *testing.T) {
+		writeFile(t, zip)
+		err := WindowsBuilt(a)
+		if err == nil || !strings.Contains(err.Error(), windowsScript) {
+			t.Errorf("WindowsBuilt() = %v, want it to name %s", err, windowsScript)
+		}
+	})
+
+	t.Run("passes once both files are on disk", func(t *testing.T) {
+		writeFile(t, script)
+		if err := WindowsBuilt(a); err != nil {
+			t.Errorf("WindowsBuilt() = %v", err)
+		}
+	})
+}
+
+func writeFile(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBuildWindowsRunsBothTargets(t *testing.T) {
 	w, runner := windowsFixture(t)
 	if err := BuildWindows(w, WithRunner(runner)); err != nil {

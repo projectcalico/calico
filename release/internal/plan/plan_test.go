@@ -97,8 +97,45 @@ func TestRun(t *testing.T) {
 				wantErr: `node "b" requires "a", which is off in this run`,
 			},
 			{
+				name:  "a skipped requirement that is done is met",
+				opts:  Options{Skip: map[string]bool{"a": true}},
+				nodes: []Node{{Name: "a", Do: noop, Done: noop}, {Name: "b", Requires: []string{"a"}, Do: noop}},
+			},
+			{
+				name:  "a requirement turned off that is done is met, wherever it sits",
+				nodes: []Node{{Name: "b", Requires: []string{"a"}, Do: noop}, {Name: "a", When: func() bool { return false }, Do: noop, Done: noop}},
+			},
+			{
+				name:    "a skipped requirement that is not done fails",
+				opts:    Options{Skip: map[string]bool{"a": true}},
+				nodes:   []Node{{Name: "a", Do: noop, Done: func() error { return errors.New("no output") }}, {Name: "b", Requires: []string{"a"}, Do: noop}},
+				wantErr: `node "b" requires "a", which is off and not done: no output`,
+			},
+			{
+				name:    "a requirement that is on must still run first, even when done",
+				nodes:   []Node{{Name: "b", Requires: []string{"a"}, Do: noop}, {Name: "a", Do: noop, Done: noop}},
+				wantErr: `node "b" requires "a", which runs after it`,
+			},
+			{
 				name:  "an off node's requirements are not checked",
 				nodes: []Node{{Name: "b", When: func() bool { return false }, Requires: []string{"a"}, Do: noop}},
+			},
+			{
+				name:    "a skipped requirement whose own requirement runs fails as stale",
+				opts:    Options{Skip: map[string]bool{"b": true}},
+				nodes:   []Node{{Name: "a", Do: noop}, {Name: "b", Requires: []string{"a"}, Do: noop, Done: noop}, {Name: "c", Requires: []string{"b"}, Do: noop}},
+				wantErr: `node "c" requires "b", which is off but would be stale: it requires "a", which runs in this run`,
+			},
+			{
+				name:  "a dry run does not check a skipped requirement",
+				opts:  Options{Skip: map[string]bool{"a": true}, Local: true},
+				nodes: []Node{{Name: "a", Do: noop, Done: func() error { return errors.New("not on the remote") }}, {Name: "b", Requires: []string{"a"}, Do: noop}},
+			},
+			{
+				name:    "a dry run still fails a skipped requirement that cannot tell",
+				opts:    Options{Skip: map[string]bool{"a": true}, Local: true},
+				nodes:   []Node{{Name: "a", Do: noop}, {Name: "b", Requires: []string{"a"}, Do: noop}},
+				wantErr: `node "b" requires "a", which is off in this run`,
 			},
 			{
 				name:    "a requirement later in the list fails",
@@ -132,6 +169,28 @@ func TestRun(t *testing.T) {
 		}
 	})
 
+	t.Run("each node's Done runs once per plan, however many nodes require it", func(t *testing.T) {
+		checks := map[string]int{}
+		done := func(name string) func() error {
+			return func() error { checks[name]++; return nil }
+		}
+		p, err := New(Options{Skip: map[string]bool{"a": true}},
+			Node{Name: "a", Do: noop, Done: done("a")},
+			Node{Name: "b", Do: noop, Done: done("b")},
+			Node{Name: "c", Requires: []string{"a", "b"}, Do: noop},
+			Node{Name: "d", Requires: []string{"a", "b"}, Do: noop},
+		)
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if err := p.Run(); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if diff := cmp.Diff(map[string]int{"a": 1, "b": 1}, checks); diff != "" {
+			t.Errorf("Done calls (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("a plan-only run warns on an unmet requirement", func(t *testing.T) {
 		p, err := New(Options{Preview: true}, Node{Name: "b", Requires: []string{"a"}, Do: noop})
 		if err != nil {
@@ -153,7 +212,7 @@ func TestRun(t *testing.T) {
 				return nil
 			}
 		}
-		return Node{Name: name, Validate: call("validate"), Do: call("do"), Verify: call("verify"), Rollback: call("rollback")}
+		return Node{Name: name, Validate: call("validate"), Do: call("do"), Done: call("done"), Rollback: call("rollback")}
 	}
 
 	tests := []struct {
@@ -166,7 +225,7 @@ func TestRun(t *testing.T) {
 			name: "every node validates before any node runs",
 			wantCalls: []string{
 				"validate a", "validate b",
-				"do a", "verify a", "do b", "verify b",
+				"do a", "done a", "do b", "done b",
 			},
 		},
 		{
@@ -180,17 +239,17 @@ func TestRun(t *testing.T) {
 			fail: map[string]string{"b": "do"},
 			wantCalls: []string{
 				"validate a", "validate b",
-				"do a", "verify a", "do b",
+				"do a", "done a", "do b",
 				"rollback a",
 			},
 			wantErr: true,
 		},
 		{
-			name: "a failed verify rolls back its own node too, newest first",
-			fail: map[string]string{"b": "verify"},
+			name: "a failed done check rolls back its own node too, newest first",
+			fail: map[string]string{"b": "done"},
 			wantCalls: []string{
 				"validate a", "validate b",
-				"do a", "verify a", "do b", "verify b",
+				"do a", "done a", "do b", "done b",
 				"rollback b", "rollback a",
 			},
 			wantErr: true,
@@ -200,7 +259,7 @@ func TestRun(t *testing.T) {
 			fail: map[string]string{"a": "rollback", "b": "rollback", "c": "do"},
 			wantCalls: []string{
 				"validate a", "validate b", "validate c",
-				"do a", "verify a", "do b", "verify b", "do c",
+				"do a", "done a", "do b", "done b", "do c",
 				"rollback b", "rollback a",
 			},
 			wantErr: true,
@@ -243,7 +302,7 @@ func TestRun(t *testing.T) {
 		if err := p.Run(); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
-		if diff := cmp.Diff([]string{"validate a", "do a", "verify a"}, calls); diff != "" {
+		if diff := cmp.Diff([]string{"validate a", "do a", "done a"}, calls); diff != "" {
 			t.Errorf("calls (-want +got):\n%s", diff)
 		}
 	})
@@ -331,7 +390,7 @@ func TestRun(t *testing.T) {
 	t.Run("a node that only checks validates and runs nothing", func(t *testing.T) {
 		var calls []string
 		check := node(&calls, "check", "")
-		check.Do, check.Verify, check.Rollback = nil, nil, nil
+		check.Do, check.Done, check.Rollback = nil, nil, nil
 		p, err := New(Options{}, check, node(&calls, "a", ""))
 		if err != nil {
 			t.Fatalf("New: %v", err)
@@ -339,7 +398,21 @@ func TestRun(t *testing.T) {
 		if err := p.Run(); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
-		if diff := cmp.Diff([]string{"validate check", "validate a", "do a", "verify a"}, calls); diff != "" {
+		if diff := cmp.Diff([]string{"validate check", "validate a", "do a", "done a"}, calls); diff != "" {
+			t.Errorf("calls (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a local run does not check Done after Do", func(t *testing.T) {
+		var calls []string
+		p, err := New(Options{Local: true}, node(&calls, "a", ""), node(&calls, "b", ""))
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if err := p.Run(); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if diff := cmp.Diff([]string{"validate a", "validate b", "do a", "do b"}, calls); diff != "" {
 			t.Errorf("calls (-want +got):\n%s", diff)
 		}
 	})
@@ -367,7 +440,7 @@ func TestRun(t *testing.T) {
 			}()
 			_ = p.Run()
 		}()
-		want := []string{"validate a", "do a", "verify a", "rollback a"}
+		want := []string{"validate a", "do a", "done a", "rollback a"}
 		if diff := cmp.Diff(want, calls); diff != "" {
 			t.Errorf("calls (-want +got):\n%s", diff)
 		}

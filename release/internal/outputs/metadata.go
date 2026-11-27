@@ -30,6 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/projectcalico/calico/release/internal/distribution"
 	"github.com/projectcalico/calico/release/internal/fsutil"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
@@ -39,6 +40,16 @@ const (
 
 	MetadataStep = "metadata"
 )
+
+// MetadataUpload writes dir's metadata with build. requires names the steps
+// whose publish records build reads.
+func MetadataUpload(dir string, build func() error, requires ...string) distribution.Upload {
+	return distribution.Upload{
+		Handler:  distribution.Preparer{Kind: MetadataStep, Action: build},
+		Requires: requires,
+		Done:     func() error { return fsutil.FilePresent(filepath.Join(dir, MetadataFileName)) },
+	}
+}
 
 type Record interface {
 	// attest validates the record before marshalling it, so an invalid record

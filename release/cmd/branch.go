@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/plan"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 )
 
@@ -63,7 +64,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 					calico.WithMainBranch(c.String(mainBranchFlag.Name)),
 					calico.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
-					calico.WithDryRun(c.Bool(localFlag.Name)),
+					calico.WithPlanOptions(plan.Options{Local: c.Bool(localFlag.Name)}),
 					calico.WithBranchCutOptions(calico.CutOptions{
 						Plan:        c.Bool(planFlag.Name),
 						Skip:        skipSet(c.StringSlice(skipFlagName)),

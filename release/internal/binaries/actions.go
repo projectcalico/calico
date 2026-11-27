@@ -15,6 +15,7 @@
 package binaries
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -116,6 +117,32 @@ func (s settings) linkFrom(src, dest string, filters []fsutil.FileFilter) (int, 
 		return 0, fmt.Errorf("creating %s: %w", dest, err)
 	}
 	return len(found), fsutil.LinkOrCopyFiles(src, dest, found)
+}
+
+// Built fails unless every binary the archive takes is on disk. With no
+// arches it cannot tell which per-arch binaries to expect, so checks none.
+func Built(repoRoot string, arches []string) error {
+	var errs []error
+	for _, src := range builtSources(repoRoot) {
+		if err := src.Present(); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", src.Name(), err))
+		}
+	}
+	for _, arch := range arches {
+		for _, path := range archBinaries(repoRoot, arch) {
+			errs = append(errs, fsutil.FilePresent(path))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// E2EBuilt passes when no requested arch has e2e support, since E2E then
+// builds nothing.
+func E2EBuilt(arches []string, outputDir string) error {
+	if len(e2eArchitectures(arches)) == 0 {
+		return nil
+	}
+	return archives.DirSource{Label: E2EComponent, From: E2EDir(outputDir), Filter: e2eShipped}.Present()
 }
 
 func Archive(repoRoot string) []archives.Contributor {
