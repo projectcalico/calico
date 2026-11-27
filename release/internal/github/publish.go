@@ -115,7 +115,7 @@ func ReleaseUpload(o ReleaseOptions, requires ...string) distribution.Upload {
 		Skip:     o.Skip,
 		Requires: requires,
 		Handler:  rel,
-		Done:     rel.Done,
+		Done:     func() error { return rel.Done(o.Source) },
 	}
 }
 
@@ -242,31 +242,50 @@ func (d Release) Publish(ctx context.Context, src string) error {
 	return gh.Publish(ctx, d.Tag, latest)
 }
 
-// Done fails unless the release exists, live when Draft is unset. A draft
-// published by hand counts: Create refuses a live release, so a rerun could not
-// redo it. GitHub serves a draft only by listing.
-func (d Release) Done() error {
+// Done fails unless the release exists, live when Draft is unset, with every
+// file in src attached in full. A draft published by hand counts: Create
+// refuses a live release, so a rerun could not redo it. GitHub serves a draft
+// only by listing.
+func (d Release) Done(src string) error {
 	gh, err := d.client()
 	if err != nil {
 		return fmt.Errorf("github client: %w", err)
 	}
 	ctx := context.Background()
-	if !d.Draft {
-		_, found, err := gh.Get(ctx, d.Tag)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("no published %s", d.Name())
-		}
-		return nil
+	find, missing := gh.Get, "no published "+d.Name()
+	if d.Draft {
+		find, missing = gh.forTag, "no "+d.Name()
 	}
-	_, found, err := gh.forTag(ctx, d.Tag)
+	rel, found, err := find(ctx, d.Tag)
 	if err != nil {
 		return err
 	}
 	if !found {
-		return fmt.Errorf("no %s", d.Name())
+		return errors.New(missing)
+	}
+	if src == "" {
+		return nil
+	}
+	files, err := fsutil.ListFiles(src, AssetsFilter...)
+	if err != nil {
+		return fmt.Errorf("get files: %w", err)
+	}
+	attached, err := gh.assets(ctx, rel.GetID())
+	if err != nil {
+		return err
+	}
+	var incomplete []string
+	for _, f := range files {
+		a, err := NewAsset(f)
+		if err != nil {
+			return err
+		}
+		if _, complete := findAsset(attached, a); !complete {
+			incomplete = append(incomplete, a.Name())
+		}
+	}
+	if len(incomplete) > 0 {
+		return fmt.Errorf("%s lacks assets: %s", d.Name(), strings.Join(incomplete, ", "))
 	}
 	return nil
 }

@@ -160,20 +160,25 @@ func (r *Releases) SyncAssets(ctx context.Context, releaseID int64, want []Asset
 
 // reconcile checks if the given asset is attached and complete, removing any incomplete uploads.
 func (r *Releases) reconcile(ctx context.Context, attached []*github.ReleaseAsset, a Asset) (bool, error) {
+	got, complete := findAsset(attached, a)
+	if complete || got == nil {
+		return complete, nil
+	}
+	if _, err := r.svc.DeleteReleaseAsset(ctx, r.repo.Owner, r.repo.Name, got.GetID()); err != nil {
+		return false, fmt.Errorf("removing incomplete asset %s: %w", a.Name(), err)
+	}
+	return false, nil
+}
+
+func findAsset(attached []*github.ReleaseAsset, a Asset) (got *github.ReleaseAsset, complete bool) {
 	for _, got := range attached {
 		if got.GetName() != a.Name() {
 			continue
 		}
 		// Check the size to ensure an upload is not a truncated upload
-		if got.GetState() == assetStateUploaded && int64(got.GetSize()) == a.Size {
-			return true, nil
-		}
-		if _, err := r.svc.DeleteReleaseAsset(ctx, r.repo.Owner, r.repo.Name, got.GetID()); err != nil {
-			return false, fmt.Errorf("removing incomplete asset %s: %w", a.Name(), err)
-		}
-		return false, nil
+		return got, got.GetState() == assetStateUploaded && int64(got.GetSize()) == a.Size
 	}
-	return false, nil
+	return nil, false
 }
 
 // UploadAsset attaches one file. GitHub rejects a name the release already

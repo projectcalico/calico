@@ -239,17 +239,22 @@ func TestReleasePublish(t *testing.T) {
 // release. Parsing that as a version fails, so a first release could never
 // be published.
 func TestReleaseDone(t *testing.T) {
+	published := func(f *fakeReleases) {
+		f.byTag = map[string]*github.RepositoryRelease{"v3.30.0": {TagName: github.String("v3.30.0")}}
+	}
+	asset := func(name, state string, size int) *github.ReleaseAsset {
+		return &github.ReleaseAsset{ID: github.Int64(7), Name: github.String(name), State: github.String(state), Size: github.Int(size)}
+	}
 	for _, tc := range []struct {
 		name    string
 		draft   bool
+		src     []string
 		fake    func(*fakeReleases)
 		wantErr string
 	}{
 		{
 			name: "a published release is done",
-			fake: func(f *fakeReleases) {
-				f.byTag = map[string]*github.RepositoryRelease{"v3.30.0": {TagName: github.String("v3.30.0")}}
-			},
+			fake: published,
 		},
 		{
 			name:    "a draft is not done",
@@ -271,22 +276,67 @@ func TestReleaseDone(t *testing.T) {
 		},
 		{name: "no draft is not done", draft: true, fake: func(*fakeReleases) {}, wantErr: "no v3.30.0 github release"},
 		{
+			name: "a release with every file attached in full is done",
+			src:  []string{"release.tgz"},
+			fake: func(f *fakeReleases) {
+				published(f)
+				f.assets = []*github.ReleaseAsset{asset("release.tgz", "uploaded", len("release.tgz"))}
+			},
+		},
+		{
+			name: "a release missing a file is not done",
+			src:  []string{"release.tgz", outputs.SumsFileName},
+			fake: func(f *fakeReleases) {
+				published(f)
+				f.assets = []*github.ReleaseAsset{asset("release.tgz", "uploaded", len("release.tgz"))}
+			},
+			wantErr: "lacks assets: " + outputs.SumsFileName,
+		},
+		{
+			name: "a truncated upload is not done, and is left in place",
+			src:  []string{"release.tgz"},
+			fake: func(f *fakeReleases) {
+				published(f)
+				f.assets = []*github.ReleaseAsset{asset("release.tgz", "uploaded", 3)}
+			},
+			wantErr: "lacks assets: release.tgz",
+		},
+		{
+			name: "an upload still in progress is not done",
+			src:  []string{"release.tgz"},
+			fake: func(f *fakeReleases) {
+				published(f)
+				f.assets = []*github.ReleaseAsset{asset("release.tgz", "new", len("release.tgz"))}
+			},
+			wantErr: "lacks assets: release.tgz",
+		},
+		{
 			name:    "a failed lookup is not done",
 			fake:    func(f *fakeReleases) { f.getErr = errors.New("rate limited") },
 			wantErr: "rate limited",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			useAssetsFilter(t, fsutil.DirFiles)
+			var src string
+			if tc.src != nil {
+				src = t.TempDir()
+				for _, n := range tc.src {
+					if err := os.WriteFile(filepath.Join(src, n), []byte(n), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
 			f := &fakeReleases{}
 			tc.fake(f)
-			err := Release{releases: testReleases(t, f), Tag: "v3.30.0", Draft: tc.draft}.Done()
+			err := Release{releases: testReleases(t, f), Tag: "v3.30.0", Draft: tc.draft}.Done(src)
 			if tc.wantErr == "" && err != nil {
 				t.Fatalf("Done() = %v, want nil", err)
 			}
 			if tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
 				t.Fatalf("Done() = %v, want an error containing %q", err, tc.wantErr)
 			}
-			if f.created != nil || f.edited != nil {
+			if f.created != nil || f.edited != nil || len(f.deleted) > 0 {
 				t.Error("Done changed a release")
 			}
 		})
