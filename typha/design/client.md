@@ -76,8 +76,7 @@ kube-proxy. Ordering:
 `ConnectionAttemptTracker` iterates candidates without repeats
 and **re-runs discovery between attempts** — during a rolling
 upgrade the endpoint set changes under the client, and retrying
-stale addresses wastes the (deliberately long, see
-[`server.md`](./server.md)) connection timeouts. The attempt
+stale addresses wastes a connection timeout each. The attempt
 budget is sized from the discovered fleet (2× headroom) before
 the client gives up.
 
@@ -98,11 +97,10 @@ are ephemeral pod IPs from EndpointSlices; identity here means
 
 ## Review notes
 
-- Today the client is a thin protocol adaptor: caching and
-  filtering live in the server (shared by all clients) or in the
-  consumer's callbacks (`dedupebuffer` for reconnection). The
-  reconnection caching may move into the client in future. Either
-  way, its output must be a valid Syncer stream.
+- The client is a thin protocol adaptor: caching and filtering
+  live in the server (shared by all clients) or in the consumer's
+  callbacks (`dedupebuffer` for reconnection). Its output must be
+  a valid Syncer stream.
 - Anything that changes reconnection behaviour must keep the
   restart-aware contract: `OnTyphaConnectionRestarted` fires
   before any update from the new connection, and a consumer that

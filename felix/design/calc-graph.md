@@ -132,13 +132,11 @@ mismatch leaks entries.
 
 ## The upstream (syncer) contract
 
-The graph's input is a Syncer API stream (delivered directly or
-via Typha — the graph can't tell). The full contract — the
-consumer algorithm, the eventual-consistency guarantee, and the
-enumeration of legal event sequences (coalescing, resync
-reversion, spurious `Deleted`) — is documented in
-[`design/syncer/DESIGN.md`](../../design/syncer/DESIGN.md); read
-it before writing a node. What it means *for a calc-graph node*:
+The graph's input is a Syncer API stream, delivered directly or
+via Typha. Read the full contract, including the legal event
+sequences, in
+[`design/syncer/DESIGN.md`](../../design/syncer/DESIGN.md) before
+writing a node. For a calc-graph node:
 
 - Reason about each event on its own, against your prior
   knowledge of *that one resource* — not about the sequence as a
@@ -158,12 +156,10 @@ it before writing a node. What it means *for a calc-graph node*:
 
 ### The update-type side channel
 
-Each event also carries `Update.UpdateType` (see the shared doc
-for its semantics). In Felix its legitimate use is stats without
-retaining objects (see `calc/stats_collector.go`). **Don't drive
-correctness from it** — decide existence from nil/non-nil, not
-the update type; `UpdateTypeKVNew/Updated` can even carry `nil`
-(failed validation), so the type may disagree with the value.
+Each event also carries `Update.UpdateType` (semantics in the
+shared doc). In Felix its only legitimate use is stats without
+retaining objects (`calc/stats_collector.go`). **Don't drive
+correctness from it** — decide existence from nil/non-nil.
 
 ### Review notes
 

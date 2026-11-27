@@ -129,11 +129,11 @@ the authoritative source for its area's architecture, invariants,
 and review notes. A PR that touches files across multiple
 "applies to" scopes must load every matching sub-design.
 
-| Topic | Applies to | Status |
-|---|---|---|
-| [protocol](./design/protocol.md) — wire protocol, handshake, compression, version skew | `typha/pkg/syncproto/**` (and any change to what goes on the wire) | ✅ exists |
-| [server](./design/server.md) — daemon pipeline, breadcrumb cache, sync server, connection management | `typha/pkg/daemon/**`, `typha/pkg/calc/**`, `typha/pkg/validator/**`, `typha/pkg/snapcache/**`, `typha/pkg/syncserver/**`, `typha/pkg/k8s/**`, `typha/pkg/config/**` | ✅ exists |
-| [client](./design/client.md) — client library, discovery, reconnection | `typha/pkg/syncclient/**`, `typha/pkg/discovery/**`, `typha/pkg/syncclientutils/**`, `typha/pkg/tlsutils/**` | ✅ exists |
+| Topic | Applies to |
+|---|---|
+| [protocol](./design/protocol.md) — wire protocol, handshake, compression, version skew | `typha/pkg/syncproto/**` (and any change to what goes on the wire) |
+| [server](./design/server.md) — daemon pipeline, breadcrumb cache, sync server, connection management | `typha/pkg/daemon/**`, `typha/pkg/calc/**`, `typha/pkg/validator/**`, `typha/pkg/snapcache/**`, `typha/pkg/syncserver/**`, `typha/pkg/k8s/**`, `typha/pkg/config/**` |
+| [client](./design/client.md) — client library, discovery, reconnection | `typha/pkg/syncclient/**`, `typha/pkg/discovery/**`, `typha/pkg/syncclientutils/**`, `typha/pkg/tlsutils/**` |
 
 Cross-cutting:
 
@@ -146,18 +146,9 @@ Cross-cutting:
 
 ## 3. For coding agents and reviewers
 
-- **Follow links.** Sub-designs reference siblings, the shared
-  syncer design, and code. A design is a graph, not a single
-  node.
-- **Review notes are the checklist.** Each sub-design embeds
-  per-section review notes; respect them at write-time, apply
-  them at review-time.
 - **Update rule.** A warranted edit goes in the sub-design covering
   the area; this index is edited when the sub-design table, an
-  `applies to` scope, or §1's architecture overview changes. The
-  path-scoped
-  [`typha.instructions.md`](../.github/instructions/typha.instructions.md)
-  file wires the rule into Copilot's automated review.
+  `applies to` scope, or §1's architecture overview changes.
 - **Tests run under plain `go test`/ginkgo.** All Typha tests,
   including the FV suite (`typha/fv-tests/`), run in-process with
   no containers.

@@ -62,9 +62,6 @@ sequenceDiagram
 There is no goodbye message: either side disconnects by closing
 the connection, and the client treats any disconnection the same
 way (reconnect and resync — see [`client.md`](./client.md)).
-Adding one would be reasonable — to carry the disconnection
-reason into the peer's logs, or a "try this server next" hint for
-load-aware rebalancing.
 
 The handshake also selects the stream contents: `MsgClientHello`
 names a `SyncerType` (`felix`, `bgp`, `tunnel-ip-allocation`,
@@ -98,14 +95,10 @@ their resource version *inside* the object, which would defeat
 the value comparison, so `SerializeUpdate` moves it out into the
 `V3ResourceVersion` field before serializing.
 
-Gob itself was chosen for ease of use early on. In hindsight its
-habit of sending type information inline, per connection,
-defeats optimisations we later wanted (splicing pre-encoded
-streams — see below); protobuf wrappers or NDJSON/CBOR would be
-cleaner, and would let the whole serialized update be cached, not
-just the KV inside it. We keep gob for compatibility; the
-decoder-restart mechanism is the escape hatch to a future
-encoding.
+Gob sends type information inline, per connection, which
+prevents splicing pre-encoded streams (see below). We keep it for
+compatibility; the decoder-restart mechanism is the escape hatch
+to a future encoding.
 
 ## Feature negotiation and decoder restart
 
@@ -137,8 +130,7 @@ once after the handshake to hand the connection to the cached
 snapshot — a self-contained compressed gob stream, generated once
 per syncer type and algorithm and replayed verbatim to every
 concurrently-connecting client — and once at its end, which the
-cached stream carries itself. Each client's decoder must be reset
-around the canned bytes.
+cached stream carries itself.
 
 Only the server→client stream is compressed; client messages are
 small. The client advertises its algorithms in

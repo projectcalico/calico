@@ -65,10 +65,10 @@ syncer → SyncerCallbacksDecoupler → ValidationFilter
 - `calc.SyncerCallbacksDecoupler` moves the stream onto another
   goroutine via an **unbuffered** channel. That's deliberate:
   it buys pipeline parallelism (downstream can process one batch
-  while upstream produces the next) but no queueing — if the
-  cache is busy, backpressure reaches the syncer immediately,
-  and the backlog accumulates in the datastore watcher, which
-  can coalesce it.
+  while upstream produces the next) without adding a queue — once
+  the cache's small input buffer (`2×MaxBatchSize` batches) is
+  full, backpressure reaches the syncer, and the backlog
+  accumulates in the datastore watcher, which can coalesce it.
 - `calc.ValidationFilter` validates each value and **nils out
   invalid ones** (treating them as deletions) rather than
   dropping batches or passing garbage on. One bad resource in
@@ -128,9 +128,6 @@ The design comment also records why *not* per-client channels:
 the bookkeeping to avoid one slow client blocking the rest
 (skipping, per-channel progress tracking) is fiddlier than
 letting each client walk an immutable list at its own pace.
-(And why a B-tree: originally this was a C-trie, chosen for its
-off-the-shelf snapshot API; C-tries optimise concurrent writes we
-don't need, and the simpler B-tree measured faster.)
 
 The cache massages the stream so that what a late-joining client
 sees is still a valid syncer stream:
@@ -191,7 +188,7 @@ pong check starts with the delta stream. Two deliberate wrinkles,
 both from load testing:
 
 - Write deadlines are only reset when they've decayed below
-  `ServerWriteTimeoutSecs` (with 10% slack) — per-message
+  `WriteTimeout` (with 10% slack) — per-message
   `SetWriteDeadline` showed up in profiles.
 - While streaming the shared snapshot, a write timeout with
   partial progress is retried, not fatal; only a stalled write
@@ -210,11 +207,11 @@ sequencing):
   thundering herd (500 clients ≈ 25 CPU-minutes, i.e. tens of
   minutes of wall clock on typical Typha CPU allocations).
 - **Shared path** (`snap_precalc.go`): the first arriving client
-  triggers a background goroutine that serializes the current
-  crumb once per compression algorithm into an in-memory buffer,
-  as a self-contained compressed gob stream ending in
-  `MsgDecoderRestart`; every client that arrives while
-  that snapshot is "active" replays the same bytes
+  for a given syncer type and compression algorithm triggers a
+  background goroutine that serializes the current crumb into an
+  in-memory buffer, as a self-contained compressed gob stream
+  ending in `MsgDecoderRestart`; every matching client that
+  arrives while that snapshot is "active" replays the same bytes
   (`multireadbuf` lets readers stream while the writer is still
   appending). Once written, the snapshot stays active for
   `BinarySnapshotTimeout` (default 1s) *and* until a newer crumb
@@ -245,21 +242,19 @@ is cheaper than replaying a long backlog. Two softenings:
   updates to the dataplane — slow progress beats a
   connect/snapshot/drop loop that makes none.
 
-The ~5-minute defaults here (and `PongTimeout`, and the client's
-read timeout) were raised over the years by field experience,
-and that's the doctrine to preserve: at high scale, a
-false-positive disconnect under load is worse than a slow
-recovery, because mass disconnection re-triggers the very
-thundering herd that caused the load. Better every node syncs in
-five minutes than every node fails in sixty seconds, repeatedly.
+The long defaults here, `PongTimeout`, and the client's read
+timeout all follow one doctrine: at high scale, a false-positive
+disconnect under load is worse than a slow recovery, because mass
+disconnection re-triggers the thundering herd that caused the
+load.
 
 ### Connection governance
 
 A fleet of Typhas has no coordinator; balance is server-driven.
 When `ConnectionRebalancingMode` is `kubernetes` (as set in the
 shipped manifests; the bare-config default is `none`), each Typha
-polls the EndpointSlices of its own Service for the live Typha
-count, takes the node count from the felix pipeline's
+polls the EndpointSlices of its own Service for the Typha count
+(ready or not), takes the node count from the felix pipeline's
 `NodeCounter`, and computes a connection cap
 (`k8s.CalculateMaxConnLimit`): fair share per Typha assuming
 `numTyphas-1` replicas (tolerating one death mid-upgrade), +20%
