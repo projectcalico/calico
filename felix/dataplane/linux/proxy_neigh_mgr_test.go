@@ -353,11 +353,11 @@ func newTestProxyNDPManager(nl *mocknetlink.MockNetlinkDataplane, ndpConns map[s
 			WorkloadIfacePrefixes: []string{"cali"},
 		},
 	}
-	nf := func(ifaceName string) (ndpConn, net.HardwareAddr, error) {
+	nf := func(ifaceName string) (ndpConn, net.HardwareAddr, netip.Addr, error) {
 		if c, ok := ndpConns[ifaceName]; ok {
-			return c, ndpTestHWAddr, nil
+			return c, ndpTestHWAddr, netip.Addr{}, nil
 		}
-		return nil, nil, fmt.Errorf("no mock for %s", ifaceName)
+		return nil, nil, netip.Addr{}, fmt.Errorf("no mock for %s", ifaceName)
 	}
 	mgr := newProxyNeighManagerWithShims(config, 6, nl, nil, nf, testReadTimeout, 0)
 	sendNoEncapPool(mgr, "default-test-pool-v6", "fd00::/8")
@@ -1050,6 +1050,73 @@ var _ = Describe("Proxy neighbor manager - listener recreation", func() {
 	})
 })
 
+var _ = Describe("Proxy NDP manager - link-local address change", func() {
+	const ownedIP = "fd00::50"
+
+	var (
+		mgr       *proxyNeighManager
+		nl        *mocknetlink.MockNetlinkDataplane
+		created   []*mockNDPConn
+		linkLocal string
+	)
+
+	BeforeEach(func() {
+		nl = newMockNetlinkForProxyNeigh()
+		created = nil
+		linkLocal = "fe80::1"
+		config := Config{
+			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
+		}
+		// Like ndp.Listen, each new conn is bound to the current link-local.
+		nf := func(ifaceName string) (ndpConn, net.HardwareAddr, netip.Addr, error) {
+			c := newMockNDPConn()
+			created = append(created, c)
+			return c, ndpTestHWAddr, netip.MustParseAddr(linkLocal + "%" + ifaceName), nil
+		}
+		mgr = newProxyNeighManagerWithShims(config, 6, nl, nil, nf, testReadTimeout, 0)
+		sendNoEncapPool(mgr, "default-test-pool-v6", "fd00::/8")
+		setIfaceAddr(nl, "eth0", "fd00::1/64")
+		sendIfaceAddrsUpdate(mgr, "eth0", "fd00::1", "fe80::1")
+		mgr.OnUpdate(wepUpdateV6("k8s", "default/pod1", "eth0", ownedIP+"/128"))
+		Expect(mgr.CompleteDeferredWork()).To(Succeed())
+		Expect(created).To(HaveLen(1))
+		Eventually(func() int { return len(created[0].getWrites()) }).Should(Equal(1))
+	})
+
+	AfterEach(func() { mgr.Stop() })
+
+	It("recreates the listener on the new link-local when the bound one is removed", func() {
+		first := mgr.listeners["eth0"]
+
+		linkLocal = "fe80::2"
+		sendIfaceAddrsUpdate(mgr, "eth0", "fd00::1", "fe80::2")
+		Expect(mgr.CompleteDeferredWork()).To(Succeed())
+
+		Expect(mgr.listeners["eth0"]).NotTo(BeIdenticalTo(first))
+		Expect(created).To(HaveLen(2))
+		Expect(mgr.listeners["eth0"].boundAddr.WithZone("")).To(Equal(netip.MustParseAddr("fe80::2")))
+
+		// The new listener rejoins the solicited-node group and re-announces.
+		group, err := ndp.SolicitedNodeMulticast(netip.MustParseAddr(ownedIP))
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(created[1].getJoinedGroups).Should(ContainElement(group))
+		Eventually(func() int { return len(created[1].getWrites()) }).Should(Equal(1))
+		na, ok := created[1].getWrites()[0].msg.(*ndp.NeighborAdvertisement)
+		Expect(ok).To(BeTrue())
+		Expect(na.TargetAddress.String()).To(Equal(ownedIP))
+	})
+
+	It("keeps the listener while its bound link-local is still present", func() {
+		first := mgr.listeners["eth0"]
+
+		sendIfaceAddrsUpdate(mgr, "eth0", "fd00::1", "fd00::2", "fe80::1")
+		Expect(mgr.CompleteDeferredWork()).To(Succeed())
+
+		Expect(mgr.listeners["eth0"]).To(BeIdenticalTo(first))
+		Expect(created).To(HaveLen(1))
+	})
+})
+
 var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 	It("re-sends gratuitous ARP for owned IPs on the announce interval (IPv4)", func() {
 		nl := newMockNetlinkForProxyNeigh()
@@ -1101,11 +1168,11 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 		config := Config{
 			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
 		}
-		nf := func(ifaceName string) (ndpConn, net.HardwareAddr, error) {
+		nf := func(ifaceName string) (ndpConn, net.HardwareAddr, netip.Addr, error) {
 			if c, ok := ndpConns[ifaceName]; ok {
-				return c, ndpTestHWAddr, nil
+				return c, ndpTestHWAddr, netip.Addr{}, nil
 			}
-			return nil, nil, fmt.Errorf("no mock for %s", ifaceName)
+			return nil, nil, netip.Addr{}, fmt.Errorf("no mock for %s", ifaceName)
 		}
 		mgr := newProxyNeighManagerWithShims(config, 6, nl, nil, nf, testReadTimeout, testAnnounceInterval)
 		ticker := newMockTicker()
