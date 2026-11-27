@@ -43,6 +43,33 @@ func (s simShape) String() string {
 
 var simShapes = []simShape{{flows: 50_000, life: 20}, {flows: 200_000, life: 20}}
 
+// simPolicies gives flows a spread of policy traces, so policy filter hints have values to collect.
+var simPolicies = func() []*proto.PolicyTrace {
+	var policies []*proto.PolicyTrace
+	for p := range 40 {
+		policies = append(policies, &proto.PolicyTrace{
+			EnforcedPolicies: []*proto.PolicyHit{
+				{
+					Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+					Namespace: fmt.Sprintf("ns-%d", p%20),
+					Name:      fmt.Sprintf("pol-%d", p),
+					Tier:      "default",
+					Action:    proto.Action_Allow,
+					RuleIndex: int64(p % 3),
+				},
+				{
+					Kind:        proto.PolicyKind_GlobalNetworkPolicy,
+					Name:        fmt.Sprintf("gnp-%d", p%7),
+					Tier:        "security",
+					Action:      proto.Action_Pass,
+					PolicyIndex: 1,
+				},
+			},
+		})
+	}
+	return policies
+}()
+
 type noopReceiver struct{}
 
 func (noopReceiver) Receive(FlowProvider, string) {}
@@ -85,7 +112,7 @@ func (s *ringSim) newKey(id int) *types.FlowKey {
 			DestPort:      int64(id % 1000),
 		},
 		&types.FlowKeyMeta{Proto: "TCP", Reporter: proto.Reporter_Src, Action: proto.Action_Allow},
-		&proto.PolicyTrace{},
+		simPolicies[id%len(simPolicies)],
 	)
 }
 
@@ -157,15 +184,33 @@ type mainLoopQuery struct {
 	run  func() (int, error)
 }
 
-// BenchmarkMainLoopQuery measures the index-backed queries against a steady-state ring.
+// BenchmarkMainLoopQuery measures list and filter hint queries against a steady-state ring, at the
+// Info log level that Goldmane runs at by default.
 func BenchmarkMainLoopQuery(b *testing.B) {
-	logrus.SetLevel(logrus.ErrorLevel)
+	logrus.SetLevel(logrus.InfoLevel)
 	sortByDest := []*proto.SortOption{{SortBy: proto.SortBy_DestName}}
+	nsFilter := &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns-3", Type: proto.MatchType_Exact}}}
 	for _, shape := range simShapes {
 		s := warmSim(shape)
 		gteAll, lt := s.ring.BeginningOfHistory(), s.now
 		gte5m := s.now - 300
 		queries := []mainLoopQuery{
+			{"List_time_all_p20", func() (int, error) {
+				f, _, err := s.ring.List(&proto.FlowListRequest{StartTimeGte: gteAll, StartTimeLt: lt, PageSize: 20})
+				return len(f), err
+			}},
+			{"List_time_5m_p20", func() (int, error) {
+				f, _, err := s.ring.List(&proto.FlowListRequest{StartTimeGte: gte5m, StartTimeLt: lt, PageSize: 20})
+				return len(f), err
+			}},
+			{"List_time_all_p20_nsfilter", func() (int, error) {
+				f, _, err := s.ring.List(&proto.FlowListRequest{StartTimeGte: gteAll, StartTimeLt: lt, PageSize: 20, Filter: nsFilter})
+				return len(f), err
+			}},
+			{"Hints_policyName_all", func() (int, error) {
+				v, _, err := s.ring.FilterHints(&proto.FilterHintsRequest{Type: proto.FilterType_FilterTypePolicyName, StartTimeGte: gteAll, StartTimeLt: lt})
+				return len(v), err
+			}},
 			{"List_dest_all_p20", func() (int, error) {
 				f, _, err := s.ring.List(&proto.FlowListRequest{StartTimeGte: gteAll, StartTimeLt: lt, PageSize: 20, SortBy: sortByDest})
 				return len(f), err
