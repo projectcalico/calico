@@ -77,9 +77,10 @@ steps:
           - name: google-service-account-for-gce-key.json
             as: GCE_SERVICE_ACCOUNT_KEY
     goCache: read
-    # The two images go up for the FV VMs to load; everything else builds here,
-    # against go-cache's disk.
+    # The two images go up for the FV VMs to load, and libbpf, which is C, comes
+    # from the calico build; the Go builds here, against go-cache's disk.
     cache:
+      - {name: calico-build, mode: read, path: /cache/calico-build}
       - {name: calico-image, mode: read, path: /cache/calico-image}
       - {name: felix-test-image, mode: read, path: /cache/felix-test-image}
     commands: |
@@ -88,6 +89,7 @@ steps:
         echo "Every FV lane passed on an earlier run of this PR with the same inputs; nothing to build."
       else
         source .argoci/scripts/vm-fleet-setup.sh
+        tar -xf /cache/calico-build/libbpf-amd64.tar -C felix/bpf-gpl
         cd felix
         # The felix-test image comes from buildkit, so fv-prereqs' image target is
         # spelled out without it. Not `make build`, which also cross-compiles the
