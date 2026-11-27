@@ -9,8 +9,6 @@ steps:
   - name: node-kind-cluster-tests
     depends: [build-calico-image, build-node-image, build-whisker-image, check-go]
     requests: {cpu: 2000m, memory: 4Gi}
-    services:
-      - docker
     secretBundles:
       - name: google-service-account-for-gce
         keys:
