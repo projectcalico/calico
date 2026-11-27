@@ -1143,8 +1143,13 @@ components:
       - ^api/pkg/apis/projectcalico/v3/[^/]*\.go$
       - ^api/pkg/defaults/[^/]*\.go$
       - ^api/pkg/lib/numorstring/[^/]*\.go$
+      - ^app-policy/policyscale/[^/]*\.go$
+      - ^app-policy/policystore/[^/]*\.go$
+      - ^app-policy/types/[^/]*\.go$
       - ^crypto/pkg/tls/[^/]*\.go$
       - ^felix/ip/[^/]*\.go$
+      - ^felix/proto/[^/]*\.go$
+      - ^felix/types/[^/]*\.go$
       - ^hack/
       - ^lib/logrusr/[^/]*\.go$
       - ^lib/std/intervals/[^/]*\.go$
@@ -1191,6 +1196,7 @@ components:
       - ^(?:[^/]+/)*[^/]*\.md$
       - ^(?:[^/]+/)*\.gitignore$
       - ^api/(?:[^/]+/)*[^/]*_test\.go$
+      - ^app-policy/(?:[^/]+/)*[^/]*_test\.go$
       - ^crypto/(?:[^/]+/)*[^/]*_test\.go$
       - ^felix/(?:[^/]+/)*[^/]*_test\.go$
       - ^lib/(?:[^/]+/)*[^/]*_test\.go$

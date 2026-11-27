@@ -23,6 +23,7 @@ const (
 	SizeofIPv4Header = 0x14
 	SizeofTCPHeader  = 0x14
 	SizeofUDPHeader  = 0x8
+	SizeofICMPHeader = 0x8
 	IPv6HeaderLen    = 40
 )
 
