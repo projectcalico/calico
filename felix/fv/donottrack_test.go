@@ -101,7 +101,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		cc.Expect(Some, tc.Felixes[1], hostW[0].Port(22), opts...)
 		cc.Expect(Some, externalClient, hostW[1].Port(22), opts...)
 		cc.Expect(Some, externalClient, hostW[0].Port(22), opts...)
-		cc.CheckConnectivityOffset(1)
+		// A custom BPF map size restarts Felix before it can program the policy.
+		cc.CheckConnectivityWithTimeoutOffset(3, 30*time.Second)
 	}
 
 	expectFailSafeOnlyConnectivity := func(opts ...ExpectationOption) {
