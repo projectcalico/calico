@@ -7,7 +7,11 @@ BUILD_IMAGES ?= $(ENVOY_RATELIMIT_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOY_RATELIMIT_VERSION=8fe6ea421048bdb2a8873d5f676b3f6eac76a997
+ENVOY_RATELIMIT_VERSION=3dfe2f9ad8ec4c8d4b037f2a955d3a50609c3b7e
+
+# This tree's go.mod needs a newer Go than GO_VERSION. "+auto" sets a floor
+# and moves higher only when go.mod asks.
+EXTRA_DOCKER_ARGS += -e GOTOOLCHAIN=go1.26.11+auto
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -32,7 +36,7 @@ $(ENVOY_RATELIMIT_DOWNLOADED):
 # 	For each valid patch file, it applies the patch to the envoy-ratelimit directory using patch -p1.
 	for patch in patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
-			patch -d envoy-ratelimit -p1 < "$$patch"; \
+			patch -d envoy-ratelimit -p1 --forward < "$$patch" || exit 1; \
 		fi; \
 	done; \
 	touch $@
