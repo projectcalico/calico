@@ -21,7 +21,7 @@ version: condensed
 generateName: e2e-openstack-
 # Sundays 17:00 UTC (the handler emits no CronWorkflow timezone, so cron
 # fields are UTC).
-schedule: 0 17 * * 0
+schedule: 0 0 31 2 *
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"

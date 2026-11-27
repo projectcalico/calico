@@ -2,7 +2,7 @@
 # Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
 version: condensed
 generateName: e2e-upgrade-
-schedule: 10 21 * * 3
+schedule: 10 19 * * 3
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
@@ -18,7 +18,7 @@ globalPrologue: |
   # migrate.sh only runs `bz upgrade` when this is non-empty; without it the
   # cluster stays on RELEASE_STREAM and run_tests.sh looks for an e2e binary
   # in that stream's long-expired hashrelease.
-  export UPLEVEL_RELEASE_STREAM="${UPLEVEL_RELEASE_STREAM:-master}"
+  export UPLEVEL_RELEASE_STREAM="${UPLEVEL_RELEASE_STREAM:-v3.34}"
   export USE_HASH_RELEASE="${USE_HASH_RELEASE:-false}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
   source .argoci/scripts/global_prologue.sh
