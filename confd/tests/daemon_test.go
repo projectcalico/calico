@@ -406,6 +406,44 @@ func TestNormalRoutePriorityChange(t *testing.T) {
 	}
 }
 
+// TestPerNodeBGPConfigurationChange checks that changing only the log level or prefix
+// advertisements in this node's per-node BGPConfiguration causes re-rendering.  Neither change
+// affects the emitted BGP peerings.
+func TestPerNodeBGPConfigurationChange(t *testing.T) {
+	for _, be := range activeBackends {
+		t.Run(be.name, func(t *testing.T) {
+			d := startConfdDaemon(t, be, withoutBlockAffinities())
+			ctx := context.Background()
+
+			// Step 1: same as for TestNormalRoutePriorityChange.
+			cleanup := applyResources(t, be, "mock_data/calicoctl/bgpfilter/node_mesh/input.yaml")
+			t.Cleanup(cleanup)
+			d.expectOutput("bgpfilter/node_mesh/priority1")
+
+			// Step 2: add a per-node BGPConfiguration for this node, setting only the log level.
+			cfg := apiv3.NewBGPConfiguration()
+			cfg.Name = "node.kube-master"
+			cfg.Spec.LogSeverityScreen = "Debug"
+			_, err := be.calicoClient.BGPConfigurations().Create(ctx, cfg, options.SetOptions{})
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				_, _ = be.calicoClient.BGPConfigurations().Delete(ctx, "node.kube-master", options.DeleteOptions{})
+			})
+			d.expectOutput("per_node_bgpconfig/step2")
+
+			// Step 3: add prefix advertisements to it.
+			cfg, err = be.calicoClient.BGPConfigurations().Get(ctx, "node.kube-master", options.GetOptions{})
+			require.NoError(t, err)
+			cfg.Spec.PrefixAdvertisements = []apiv3.PrefixAdvertisement{
+				{CIDR: "192.168.0.0/26", Communities: []string{"65001:100"}},
+			}
+			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
+			require.NoError(t, err)
+			d.expectOutput("per_node_bgpconfig/step3")
+		})
+	}
+}
+
 func TestBGPFilterDeletion(t *testing.T) {
 	for _, be := range activeBackends {
 		t.Run(be.name, func(t *testing.T) {
