@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# stage-windows-image <component> <image> <out>: builds what <component>'s
+# Dockerfile.windows copies and lays it out in <out> as a buildkit context, with a
+# build-args-<version> file per Windows version and the tar name each image's
+# consumers look for. The Dockerfile is a single stage with nothing to RUN, which is
+# what lets buildkit build it for Windows from Linux; one that grows either fails
+# here.
+set -euo pipefail
+
+component=${1:?usage: stage-windows-image <component> <image> <out>}
+image=${2:?usage: stage-windows-image <component> <image> <out>}
+out=${3:?usage: stage-windows-image <component> <image> <out>}
+dockerfile=$component/Dockerfile.windows
+
+fail() { echo "stage-windows-image: $*" >&2; exit 1; }
+
+[ "$(grep -c '^FROM ' "$dockerfile")" = 1 ] || fail "$dockerfile is no longer a single stage"
+! grep -q '^RUN ' "$dockerfile" || fail "$dockerfile runs commands, which buildkit cannot for Windows"
+! grep -q -- '^COPY --' "$dockerfile" || fail "$dockerfile's COPY takes flags this does not stage"
+
+print() {
+  make -s --no-print-directory -C "$component" --eval="print-it: ; @echo \$($1)" print-it
+}
+# shellcheck disable=SC2046 # a list of make targets
+make -C "$component" $(print WINDOWS_IMAGE_REQS)
+
+mkdir -p "$out"
+cp "$dockerfile" "$out/Dockerfile"
+while read -r _ src _; do
+  mkdir -p "$out/$(dirname "$src")"
+  cp -a "$component/$src" "$out/$src"
+done < <(grep '^COPY ' "$dockerfile")
+
+git_version=$(print GIT_VERSION)
+for version in $(print WINDOWS_VERSIONS); do
+  printf 'GIT_VERSION=%s\nWINDOWS_VERSION=%s\n' "$git_version" "$version" >"$out/build-args-$version"
+done
+echo "$image-$git_version" >"$out/tar-prefix"
+ls -R "$out" | head -40

@@ -457,6 +457,8 @@ includes:
         - ^process/testing/aso/
         - ^process/testing/util/
         - ^process/testing/winfv-felix/
+        # Windows FV installs the images this stages.
+        - ^\.argoci/scripts/stage-windows-image$
         - ^\.argoci/modules/20-felix\.yaml$
 
   - path: .argoci/modules/40-openstack.yaml

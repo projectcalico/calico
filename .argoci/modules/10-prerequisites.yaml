@@ -407,48 +407,128 @@ steps:
       zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/whisker-image.tar
       artifact push workflow /tmp/whisker-image.tar.zst
 
-  # Built through the same target its consumers run, so the refs it bakes in
-  # (localhost:5000/calico/<name>:test-build) are the ones they install.
-  - name: build-operator-image
+  # The operator binary twice, once per set of image refs compiled into it: the
+  # kind lanes install localhost:5000/calico/<name>:test-build, Windows FV the
+  # docker.io refs. Each is staged as a buildkit context, so nothing needs docker.
+  - name: build-operator-binary
     env:
-      - name: BUILD_CACHE_GROUP
-        value: calico
-    services: [docker]
-    timeout: 1h
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    useGoBuild: true
     jobSize: large
     requests: {cpu: 7000m, memory: 8Gi}
-    changes:
+    changes: &operator-image-changes
       dependsOn: [operator]
       in:
         - '^operator/'
         - '^\.argoci/modules/10-prerequisites\.yaml$'
+        - '^\.argoci/scripts/stage-operator-image$'
+    goCache: read
+    cache:
+      - {name: operator-build, mode: write, path: /cache/operator-build}
     commands: |
-      make kind-operator-image
-      docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
-      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image.tar
+      for flavor in kind:localhost:5000 dockerio:docker.io; do
+        # The refs are ldflags, which make cannot see, so each build relinks.
+        rm -f operator/build/_output/bin/operator-amd64
+        make -C operator build CALICO_VERSION=test-build CALICO_REGISTRY="${flavor#*:}" CALICO_IMAGE_PATH=calico
+        .argoci/scripts/stage-operator-image "/cache/operator-build/${flavor%%:*}" operator/build/_output/bin/operator-amd64
+      done
+
+  - name: build-operator-image-tar
+    depends: [build-operator-binary]
+    changes: *operator-image-changes
+    cache:
+      - {name: operator-build, mode: read, path: /cache/operator-build}
+      - {name: "operator-image-${FLAVOR}", mode: write, path: /cache/operator-image}
+    buildkit:
+      context: "/cache/operator-build/${FLAVOR}"
+      buildArgsFile: build-args
+      tag: "${REF}"
+      tar: /cache/operator-image/operator.tar
+    matrix:
+      - name: kind
+        env: [{name: FLAVOR, value: kind}, {name: REF, value: "localhost:5000/calico/operator:test-build"}]
+      - name: dockerio
+        env: [{name: FLAVOR, value: dockerio}, {name: REF, value: "calico/operator:test-build"}]
+
+  - name: build-operator-image
+    depends: [build-operator-image-tar]
+    changes: *operator-image-changes
+    requests: {cpu: 2000m, memory: 1Gi}
+    cache:
+      - {name: operator-image-kind, mode: read, path: /cache/operator-image-kind}
+      - {name: operator-image-dockerio, mode: read, path: /cache/operator-image-dockerio}
+    commands: |
+      zstd -3 -T${GOMAXPROCS:-1} /cache/operator-image-kind/operator.tar -o /tmp/operator-image.tar.zst
+      zstd -3 -T${GOMAXPROCS:-1} /cache/operator-image-dockerio/operator.tar -o /tmp/operator-image-dockerio.tar.zst
       artifact push workflow /tmp/operator-image.tar.zst
-      # Windows FV installs from docker.io refs rather than the kind registry.
-      DEV_IMAGE_REGISTRY=docker.io DEV_IMAGE_PATH=calico DEV_IMAGE_TAG=test-build \
-        hack/test/kind/infra/build-operator.sh
-      docker save calico/operator:test-build -o /tmp/operator-image-dockerio.tar
-      zstd -3 -T${GOMAXPROCS:-1} --rm /tmp/operator-image-dockerio.tar
       artifact push workflow /tmp/operator-image-dockerio.tar.zst
 
   # Windows FV installs these rather than building its own. Nothing else builds
   # them, so this is also where a break in them shows up.
-  - name: build-windows-images
-    services: [docker]
-    timeout: 1h
+  - name: build-windows-binaries
+    env:
+      - name: NATIVE_GO_BUILD
+        value: "true"
+    useGoBuild: true
     jobSize: large
     requests: {cpu: 7000m, memory: 8Gi}
-    changes:
+    changes: &windows-image-changes
       dependsOn: [node, cni-plugin]
-      in: ['^\.argoci/modules/10-prerequisites\.yaml$']
+      in:
+        - '^\.argoci/modules/10-prerequisites\.yaml$'
+        - '^\.argoci/scripts/stage-windows-image$'
+    goCache: read
+    cache:
+      - {name: windows-build, mode: write, path: /cache/windows-build}
     commands: |
       make -C node build-windows-archive
-      make -C node image-windows
-      make -C cni-plugin image-windows
-      tar --use-compress-program="zstd -3" -cf /tmp/windows-images.tar.zst \
+      .argoci/scripts/stage-windows-image node node-windows /cache/windows-build/node
+      .argoci/scripts/stage-windows-image cni-plugin cni-windows /cache/windows-build/cni-plugin
+
+  - name: build-windows-image-tar
+    depends: [build-windows-binaries]
+    changes: *windows-image-changes
+    cache:
+      - {name: windows-build, mode: read, path: /cache/windows-build}
+      - {name: "windows-${COMPONENT}-${WINVER}", mode: write, path: /cache/windows-image}
+    buildkit:
+      context: "/cache/windows-build/${COMPONENT}"
+      buildArgsFile: "build-args-${WINVER}"
+      platform: windows/amd64
+      # Windows FV retags the imported image from this ref.
+      tag: "${IMAGE}:latest"
+      tar: /cache/windows-image/image.tar
+    matrix:
+      - {name: node-ltsc2019, env: [{name: COMPONENT, value: node}, {name: IMAGE, value: node-windows}, {name: WINVER, value: ltsc2019}]}
+      - {name: node-ltsc2022, env: [{name: COMPONENT, value: node}, {name: IMAGE, value: node-windows}, {name: WINVER, value: ltsc2022}]}
+      - {name: node-ltsc2025, env: [{name: COMPONENT, value: node}, {name: IMAGE, value: node-windows}, {name: WINVER, value: ltsc2025}]}
+      - {name: cni-ltsc2019, env: [{name: COMPONENT, value: cni-plugin}, {name: IMAGE, value: cni-windows}, {name: WINVER, value: ltsc2019}]}
+      - {name: cni-ltsc2022, env: [{name: COMPONENT, value: cni-plugin}, {name: IMAGE, value: cni-windows}, {name: WINVER, value: ltsc2022}]}
+      - {name: cni-ltsc2025, env: [{name: COMPONENT, value: cni-plugin}, {name: IMAGE, value: cni-windows}, {name: WINVER, value: ltsc2025}]}
+
+  # Named as the images' consumers look for them.
+  - name: build-windows-images
+    depends: [build-windows-image-tar]
+    changes: *windows-image-changes
+    requests: {cpu: 2000m, memory: 1Gi}
+    cache:
+      - {name: windows-build, mode: read, path: /cache/windows-build}
+      - {name: windows-node-ltsc2019, mode: read, path: /cache/windows-node-ltsc2019}
+      - {name: windows-node-ltsc2022, mode: read, path: /cache/windows-node-ltsc2022}
+      - {name: windows-node-ltsc2025, mode: read, path: /cache/windows-node-ltsc2025}
+      - {name: windows-cni-plugin-ltsc2019, mode: read, path: /cache/windows-cni-plugin-ltsc2019}
+      - {name: windows-cni-plugin-ltsc2022, mode: read, path: /cache/windows-cni-plugin-ltsc2022}
+      - {name: windows-cni-plugin-ltsc2025, mode: read, path: /cache/windows-cni-plugin-ltsc2025}
+    commands: |
+      for component in node cni-plugin; do
+        prefix=$(cat "/cache/windows-build/${component}/tar-prefix")
+        mkdir -p "${component}/dist/windows"
+        for version in ltsc2019 ltsc2022 ltsc2025; do
+          ln -s "/cache/windows-${component}-${version}/image.tar" "${component}/dist/windows/${prefix}-${version}.tar"
+        done
+      done
+      tar --dereference --use-compress-program="zstd -3" -cf /tmp/windows-images.tar.zst \
         node/dist/windows/*.tar cni-plugin/dist/windows/*.tar
       artifact push workflow /tmp/windows-images.tar.zst
 
