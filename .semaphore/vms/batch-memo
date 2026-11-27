@@ -2,6 +2,9 @@
 # with the same cache key is skipped, and its reports are restored in place of
 # a re-run.  The keys come from the plan that the felix-fv-plan step publishes.
 #
+# Unused on this branch: only ArgoCI has a felix-fv-plan step, and this branch
+# runs Felix FV on Semaphore.  Kept so .semaphore/vms matches master.
+#
 # Source it.  batch_memo_init sets BATCH_MEMO_PREFIX, which run-tests-on-vms
 # keys on; with it unset, every batch runs and nothing is recorded.
 #
