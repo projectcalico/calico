@@ -214,11 +214,21 @@ for batch in "${batches[@]}"; do
   exit 1
 done
 
+# Each gcloud takes ~100MB; one or two per VM at once ran a 61-VM lane's 8GB
+# Semaphore agent out of memory and killed the job's shell.  Anything but a
+# positive integer would spin the loop below (0) or lift the cap (non-number).
+[[ "${VM_LABEL_PARALLELISM:-}" =~ ^[1-9][0-9]*$ ]] || VM_LABEL_PARALLELISM=8
 for vm_name in "${!vm_zone[@]}"; do
-  label_boot_disk "$vm_name" "${vm_zone[$vm_name]}" &
-  if [ "$vm_provisioning_model" = SPOT ]; then
-    label_capacity "$vm_name" "${vm_zone[$vm_name]}" "$vm_machine_type" &
-  fi
+  while [ "$(jobs -rp | wc -l)" -ge "$VM_LABEL_PARALLELISM" ]; do
+    wait -n || true
+  done
+  # One job per VM, so a spot VM's two labels count once against the cap.
+  {
+    label_boot_disk "$vm_name" "${vm_zone[$vm_name]}"
+    if [ "$vm_provisioning_model" = SPOT ]; then
+      label_capacity "$vm_name" "${vm_zone[$vm_name]}" "$vm_machine_type"
+    fi
+  } &
 done
 wait
 
