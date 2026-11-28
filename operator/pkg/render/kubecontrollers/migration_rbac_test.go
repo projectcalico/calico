@@ -56,7 +56,7 @@ var _ = Describe("MigrationRBACComponent", func() {
 			Expect(cr.Rules).To(ContainElement(rbacv1.PolicyRule{
 				APIGroups: []string{"apiregistration.k8s.io"},
 				Resources: []string{"apiservices"},
-				Verbs:     []string{"get", "list", "watch", "create", "delete"},
+				Verbs:     []string{"get", "list", "watch", "create", "update", "delete"},
 			}))
 		})
 

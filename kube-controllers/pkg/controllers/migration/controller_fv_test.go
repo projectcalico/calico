@@ -425,6 +425,50 @@ func TestPending_LockOrderingAndDrain(t *testing.T) {
 	g.Expect(log.snapshot()).To(Equal([]string{eventLockV1, eventDeleteAPIService, eventLockV3}))
 }
 
+// TestPending_RecordsLockBeforeTakingIt verifies that Pending saves
+// DatastoreLockedAt before it locks v1, so an abort always knows to unlock, and
+// that a lock taken on a retry restarts the drain.
+func TestPending_RecordsLockBeforeTakingIt(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	logCtx := logrus.WithField("test", t.Name())
+
+	// The first lock attempt fails, as if the backend were briefly unavailable.
+	bc := &mockBackendClient{
+		resources:            mainlineV1Resources(),
+		clusterInfo:          mainlineV1ClusterInfo(),
+		clusterInfoUpdateErr: errors.New("simulated backend unavailable"),
+	}
+	fakeAPIReg := recordingAPIRegClient(&orderLog{})
+	m := newTestController(ctx, bc, fakeAPIReg, fvRTClient, time.Minute)
+
+	createMigrationCR(t, ctx)
+	dm := &migrationv1.DatastoreMigration{}
+	g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
+
+	// The failed lock still leaves the lock recorded in the stored CR.
+	g.Expect(m.handlePending(logCtx, dm)).To(MatchError(ContainSubstring("simulated backend unavailable")))
+	g.Expect(v1DatastoreReady(g, bc)).To(Equal(ptr.To(true)))
+	stored := &migrationv1.DatastoreMigration{}
+	g.Expect(fvRTClient.Get(ctx, dmKey, stored)).To(Succeed())
+	g.Expect(stored.Status.DatastoreLockedAt).NotTo(BeNil(), "the lock must be recorded before it is taken")
+
+	// Backdate the record past the drain, so only a restarted drain can hold
+	// the APIService on the retry.
+	dm.Status.DatastoreLockedAt = ptr.To(metav1.NewTime(time.Now().Add(-time.Hour)))
+	g.Expect(fvRTClient.Status().Update(ctx, dm)).To(Succeed())
+
+	// The retry takes the lock and restarts the drain instead of moving on.
+	bc.clusterInfoUpdateErr = nil
+	err := m.handlePending(logCtx, dm)
+	var requeue requeueAfter
+	g.Expect(errors.As(err, &requeue)).To(BeTrue(), "expected the drain to restart, got: %v", err)
+	g.Expect(v1DatastoreReady(g, bc)).To(Equal(ptr.To(false)))
+	g.Expect(dm.Status.DatastoreLockedAt.Time).To(BeTemporally("~", time.Now(), 5*time.Second))
+	_, err = fakeAPIReg.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred(), "APIService must survive the restarted drain")
+}
+
 // TestPending_ConflictsParkWithV1Locked verifies that conflicts detected in the
 // Pending phase leave the CR in WaitingForConflictResolution with v1 locked and
 // the APIService already unregistered.

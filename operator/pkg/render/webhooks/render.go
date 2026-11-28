@@ -374,8 +374,8 @@ func (c *component) ObjectsBeforeOverrides() ([]client.Object, []client.Object) 
 				FailurePolicy:           ptr.To(admissionregistrationv1.Fail),
 			},
 			{
-				// This webhook blocks user writes to ClusterInformation, which is a read-only resource managed by
-				// Calico system components. This mirrors the write protection provided by the aggregated API server.
+				// This webhook blocks user writes to ClusterInformation, which Calico system components manage. Users
+				// may only flip spec.datastoreReady, which calicoctl uses to lock the datastore, subject to RBAC.
 				Name: "cluster-info.api.projectcalico.org",
 				Rules: []admissionregistrationv1.RuleWithOperations{
 					{
