@@ -81,7 +81,7 @@ type ndpConn interface {
 
 type (
 	arpClientFactory func(ifaceName string) (arpClient, net.HardwareAddr, error)
-	ndpConnFactory   func(ifaceName string) (ndpConn, net.HardwareAddr, error)
+	ndpConnFactory   func(ifaceName string) (ndpConn, net.HardwareAddr, netip.Addr, error)
 )
 
 // tickerShim is the minimal slice of *time.Ticker the periodic re-announce loop
@@ -185,14 +185,14 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			return c, ifi.HardwareAddr, nil
 		}
 	} else {
-		nf = func(ifaceName string) (ndpConn, net.HardwareAddr, error) {
+		nf = func(ifaceName string) (ndpConn, net.HardwareAddr, netip.Addr, error) {
 			ifi, err := net.InterfaceByName(ifaceName)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, netip.Addr{}, err
 			}
-			conn, _, err := ndp.Listen(ifi, ndp.LinkLocal)
+			conn, addr, err := ndp.Listen(ifi, ndp.LinkLocal)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, netip.Addr{}, err
 			}
 			// Set the ICMPV6 filter to only deliver Neighbor Solicitations
 			var f ipv6.ICMPFilter
@@ -200,9 +200,9 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			f.Accept(ipv6.ICMPTypeNeighborSolicitation)
 			if err := conn.SetICMPFilter(&f); err != nil {
 				_ = conn.Close()
-				return nil, nil, err
+				return nil, nil, netip.Addr{}, err
 			}
-			return conn, ifi.HardwareAddr, nil
+			return conn, ifi.HardwareAddr, addr, nil
 		}
 	}
 	return newProxyNeighManagerWithShims(dpConfig, ipVersion, nl, af, nf, readDeadlineInterval, dpConfig.LocalSubnetL2ReachabilityRefreshInterval)
@@ -508,8 +508,7 @@ func (m *proxyNeighManager) addMatchingIPs(desiredByIface map[string]set.Set[str
 func (m *proxyNeighManager) reconcileListeners() error {
 	desiredByIface := m.buildDesiredState()
 
-	// Drop listeners that are no longer desired or whose goroutine reported an
-	// unrecoverable socket error.
+	// Drop listeners that are no longer desired or have been marked failed.
 	for ifaceName, l := range m.listeners {
 		if _, desired := desiredByIface[ifaceName]; desired && !l.failed.Load() {
 			continue
@@ -564,13 +563,14 @@ func (m *proxyNeighManager) startListener(ifaceName string) error {
 		l.hwAddr = hwAddr
 		go l.runARPListener()
 	} else {
-		conn, hwAddr, err := m.ndpFactory(ifaceName)
+		conn, hwAddr, boundAddr, err := m.ndpFactory(ifaceName)
 		if err != nil {
 			l.cancel()
 			return err
 		}
 		l.ndpCli = conn
 		l.hwAddr = hwAddr
+		l.boundAddr = boundAddr
 		go l.runNDPListener()
 	}
 
@@ -604,8 +604,9 @@ type ifaceListener struct {
 	// only ever touched by the listener goroutine, so it needs no synchronization.
 	announced set.Set[string]
 
-	arpCli      arpClient // IPv4 only
-	ndpCli      ndpConn   // IPv6 only
+	arpCli      arpClient  // IPv4 only
+	ndpCli      ndpConn    // IPv6 only
+	boundAddr   netip.Addr // IPv6 only: the link-local address ndpCli is bound to
 	hwAddr      net.HardwareAddr
 	readTimeout time.Duration
 
@@ -1050,6 +1051,7 @@ func (m *proxyNeighManager) refreshHostIface(ifaceName string) {
 		delete(m.hostIfaceToCIDRs, ifaceName)
 		return
 	}
+	m.failListenerIfAddrRemoved(ifaceName, addrs)
 
 	var cidrs []net.IPNet
 	for _, addr := range addrs {
@@ -1069,4 +1071,23 @@ func (m *proxyNeighManager) refreshHostIface(ifaceName string) {
 	} else {
 		delete(m.hostIfaceToCIDRs, ifaceName)
 	}
+}
+
+// failListenerIfAddrRemoved marks ifaceName's NDP listener failed, so it is
+// recreated, when its bound address is missing from addrs or dadfailed.
+func (m *proxyNeighManager) failListenerIfAddrRemoved(ifaceName string, addrs []netlink.Addr) {
+	l, ok := m.listeners[ifaceName]
+	if !ok || m.ipVersion != 6 {
+		return
+	}
+	for _, a := range addrs {
+		if a.IPNet != nil && a.Flags&unix.IFA_F_DADFAILED == 0 && a.IP.Equal(l.boundAddr.AsSlice()) {
+			return
+		}
+	}
+	logrus.WithFields(logrus.Fields{
+		"iface": ifaceName,
+		"addr":  l.boundAddr,
+	}).Info("Proxy NDP listener's bound address was removed or failed DAD; recreating listener")
+	l.failed.Store(true)
 }
