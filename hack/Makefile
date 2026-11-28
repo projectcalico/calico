@@ -49,6 +49,7 @@ st:
 .PHONY: shell-test
 shell-test:
 	bash cherry-pick-pull_test.sh
+	bash check-image-arch_test.sh
 
 ###############################################################################
 # CI
