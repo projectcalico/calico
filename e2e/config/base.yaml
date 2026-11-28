@@ -11,6 +11,12 @@
 
 exclude:
   labels:
+    - label: Upgrade:Seed
+      reason: "upgrade-scenario state, created on the old cluster; only E2E_UPGRADE_PHASE=seed selects it"
+
+    - label: Upgrade:Verify
+      reason: "checks state that a seed phase created before an upgrade; only E2E_UPGRADE_PHASE=verify selects it"
+
     - label: Slow
       reason: "long-running tests not suitable for CI"
 

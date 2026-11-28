@@ -1,0 +1,80 @@
+# Each object holds one value a v3.34 CRD validation rule rejects (the
+# comment names the PR). Seed applies them one by one; whichever the
+# from-stream accepts become the seeds. None reaches the dataplane: policies
+# select nothing, and per-node objects name nodes that don't exist.
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata: {name: e2e-upgrade-crd-invalid-stored-desc-port}  # 14465
+spec:
+  selector: app == 'crdv-none'
+  ingress: [{action: Allow, protocol: TCP, destination: {ports: ['9000:8000']}}]
+---
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata: {name: np-desc-port}  # 14465
+spec:
+  selector: app == 'crdv-none'
+  ingress: [{action: Allow, protocol: TCP, destination: {ports: ['9000:8000']}}]
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata: {name: e2e-upgrade-crd-invalid-stored-notnets-all}  # 14287
+spec:
+  selector: app == 'crdv-none'
+  egress: [{action: Deny, destination: {notNets: ['0.0.0.0/0']}}]
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata: {name: e2e-upgrade-crd-invalid-stored-bare-ip}  # 14286
+spec:
+  selector: app == 'crdv-none'
+  ingress: [{action: Allow, source: {nets: ['10.0.0.1']}}]
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata: {name: e2e-upgrade-crd-invalid-stored-icmp-ports}  # 14285
+spec:
+  selector: app == 'crdv-none'
+  ingress: [{action: Allow, protocol: ICMP, destination: {ports: [80]}}]
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata: {name: e2e-upgrade-crd-invalid-stored-http-egress}  # 14290
+spec:
+  selector: app == 'crdv-none'
+  egress: [{action: Allow, http: {methods: ['GET']}}]
+---
+apiVersion: projectcalico.org/v3
+kind: StagedGlobalNetworkPolicy
+metadata: {name: e2e-upgrade-crd-invalid-stored-staged-delete}  # 14292
+spec: {stagedAction: Delete, selector: all()}
+---
+apiVersion: projectcalico.org/v3
+kind: FelixConfiguration
+metadata: {name: node.e2e-upgrade-crd-invalid-stored-fake-1}  # 14283
+spec: {bpfDataIfacePattern: '['}
+---
+apiVersion: projectcalico.org/v3
+kind: FelixConfiguration
+metadata: {name: node.e2e-upgrade-crd-invalid-stored-fake-2}  # 14465
+spec: {kubeNodePortRanges: ['32000:31000']}
+---
+apiVersion: projectcalico.org/v3
+kind: HostEndpoint
+metadata: {name: e2e-upgrade-crd-invalid-stored-hep}  # 14277
+spec: {node: e2e-upgrade-no-such-node, interfaceName: eth9, profiles: ['Not Valid!']}
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata: {name: e2e-upgrade-crd-invalid-stored-peer-ip}  # 13913
+spec: {node: e2e-upgrade-no-such-node, peerIP: 'not-an-ip', asNumber: 64512}
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkSet
+metadata: {name: e2e-upgrade-crd-invalid-stored-netset-dup}  # 14058
+spec: {nets: ['192.0.2.0/24', '192.0.2.0/24']}
+---
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata: {name: e2e-upgrade-crd-invalid-stored-pool-unmasked}  # 13493
+spec: {cidr: 10.250.0.1/24, disabled: true}

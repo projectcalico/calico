@@ -173,7 +173,9 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   # Upgrade runs set RELEASE_STREAM to the downlevel version they install
   # first, but the tests run against the uplevel version.
   E2E_STREAM=${UPLEVEL_RELEASE_STREAM:-${RELEASE_STREAM}}
-  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${E2E_STREAM}.txt")
+  # Preset when an upgrade job pins one hashrelease across its seed and
+  # verify runs; a newer one published in between would bring different specs.
+  HASHREL_URL=${HASHREL_URL:-$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${E2E_STREAM}.txt")}
   echo "[INFO] hashrelease URL: ${HASHREL_URL}"
   ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
   mkdir -p "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s"
@@ -246,6 +248,12 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
 EOF
     exit 0
   fi
+fi
+
+# Once the downlevel cluster was seeded, the post-upgrade run also selects the
+# scenarios' verify specs. The binary reads both variables.
+if [[ -z "${E2E_UPGRADE_PHASE:-}" && -n "${E2E_UPGRADE_SEEDED:-}" ]]; then
+  export E2E_UPGRADE_PHASE=verify E2E_UPGRADE_FROM="${RELEASE_STREAM}"
 fi
 
 # E2E_BINARY is a set/unset sentinel (its value is not used here -- make
@@ -330,7 +338,9 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   sandcat_inline=()
   sandcat_xtrace=""
   [[ $- == *x* ]] && sandcat_xtrace=1 && set +x
-  if sandcat_env=$(SANDCAT_TOTAL_BUDGET="${SANDCAT_TOTAL_BUDGET:-10m}" "${sandcat_sh}" inline-env \
+  # A second run in one job must disable it: sandcat's job artifacts are
+  # write-once, so the later run's push fails.
+  if [[ "${SANDCAT:-}" != "DISABLED" ]] && sandcat_env=$(SANDCAT_TOTAL_BUDGET="${SANDCAT_TOTAL_BUDGET:-10m}" "${sandcat_sh}" inline-env \
       --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" --source-dir "$(pwd)"); then
     eval "${sandcat_env}"
     export SANDCAT_GEMINI_KEY="${SANDCAT_INLINE_GEMINI_KEY}"
@@ -378,6 +388,8 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
     -e WINDOWS_OS \
+    -e E2E_UPGRADE_PHASE \
+    -e E2E_UPGRADE_FROM \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     "${auth_mount[@]}" \
     "${aws_cred_env[@]}" \
@@ -401,12 +413,14 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   mkdir -p "${REPORT_DIR}"
   cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
 
-  ("${sandcat_sh}" push-specs --spec-dir report/sandcat) || true
-  ("${sandcat_sh}" analyze \
-    --report report/report.json \
-    --log-file "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" \
-    --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" \
-    --source-dir "$(pwd)") || true
+  if [[ "${SANDCAT:-}" != "DISABLED" ]]; then
+    ("${sandcat_sh}" push-specs --spec-dir report/sandcat) || true
+    ("${sandcat_sh}" analyze \
+      --report report/report.json \
+      --log-file "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" \
+      --kubeconfig "${BZ_LOCAL_DIR}/kubeconfig" \
+      --source-dir "$(pwd)") || true
+  fi
   popd || exit
 
   check_component_logs
