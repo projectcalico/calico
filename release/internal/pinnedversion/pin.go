@@ -390,7 +390,21 @@ var localCheck = func(l LocalLoader, p *Pin) bool {
 	if strings.HasSuffix(productVer, "-dirty") {
 		return false
 	}
-	return p.ProductVersion == productVer
+	if p.ProductVersion != productVer {
+		return false
+	}
+	// The pin must cover exactly the outside repos this run includes, at the
+	// versions it pinned: re-describing them would let a step run after a build
+	// replace the pin that build's publish reads.
+	pinned := make(map[string]registry.Component, len(l.Config.Repos))
+	for _, r := range l.Config.Repos {
+		c, ok := p.Components[r.Component]
+		if !ok {
+			return false
+		}
+		pinned[r.Component] = c
+	}
+	return p.Hash == hash(productVer, pinned)
 }
 
 // source pins the versions of this repository and any extra repos.
