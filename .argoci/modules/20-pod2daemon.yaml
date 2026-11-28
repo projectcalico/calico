@@ -1,18 +1,19 @@
-# pod2daemon `make ci`.
+# pod2daemon `make ci`. Through docker, not natively in go-build: the CSI
+# driver tests mount filesystems, which needs a privileged container.
 version: condensed-module
 
 defaults:
   timeout: 1h
-  useGoBuild: true
+  services:
+    - docker
 
 steps:
   - name: pod2daemon-ci
     env:
-      - name: NATIVE_GO_BUILD
-        value: "true"
+      - name: BUILD_CACHE_GROUP
+        value: calico
     depends: [check-go]
     requests: {cpu: 2750m, memory: 2Gi}
-    goCache: read
     commands: |
       cd pod2daemon
       make ci
